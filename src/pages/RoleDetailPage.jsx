@@ -1,15 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Save, Briefcase, FileText } from 'lucide-react';
+import { ArrowLeft, Save, Briefcase, FileText, Sliders, Plus, Upload, FileBox } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import PageHeader from '../components/common/PageHeader.jsx';
 import Card from '../components/common/Card.jsx';
 import Button from '../components/common/Button.jsx';
+import Modal from '../components/common/Modal.jsx';
+import FileDrop from '../components/common/FileDrop.jsx';
 import Spinner from '../components/common/Spinner.jsx';
+
+import JDEditor from '../components/jd/JDEditor.jsx';
+import JDTemplatePicker from '../components/jd/JDTemplatePicker.jsx';
+import PipelineBoard from '../components/pipeline/PipelineBoard.jsx';
+import StageCustomizer from '../components/pipeline/StageCustomizer.jsx';
+import CandidateImportDialog from '../components/candidates/CandidateImportDialog.jsx';
+
 import { supabase } from '../lib/supabase.js';
-import { STAGES } from '../lib/pipeline.js';
+import { uploadJD } from '../lib/api.js';
 
 export default function RoleDetailPage() {
   const { projectId, roleId } = useParams();
@@ -29,6 +38,12 @@ export default function RoleDetailPage() {
   });
 
   const [draft, setDraft] = useState({ jd_html: '', sr_number: '', title: '', location: '', level: '' });
+  const [pickOpen, setPickOpen] = useState(false);
+  const [stageOpen, setStageOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [jdFile, setJdFile] = useState(null);
+
   useEffect(() => {
     if (role) {
       setDraft({
@@ -47,6 +62,7 @@ export default function RoleDetailPage() {
         .from('roles')
         .update({
           jd_html: draft.jd_html,
+          jd_source: role?.jd_source === 'uploaded' ? 'inline' : (role?.jd_source || 'inline'),
           sr_number: draft.sr_number || null,
           title: draft.title,
           location: draft.location || null,
@@ -62,10 +78,23 @@ export default function RoleDetailPage() {
     onError: (e) => toast.error(e.message),
   });
 
+  const upload = useMutation({
+    mutationFn: async () => {
+      if (!jdFile) throw new Error('Please choose a file.');
+      return uploadJD({ roleId, file: jdFile });
+    },
+    onSuccess: ({ jd_html }) => {
+      toast.success('JD uploaded and parsed');
+      setDraft((d) => ({ ...d, jd_html: jd_html || d.jd_html }));
+      setUploadOpen(false);
+      setJdFile(null);
+      qc.invalidateQueries({ queryKey: ['role', roleId] });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   if (isLoading) return <Spinner />;
   if (!role) return <div className="text-slate-400">Role not found.</div>;
-
-  const stageConfig = Array.isArray(role.stage_config) ? role.stage_config : [];
 
   return (
     <>
@@ -76,31 +105,34 @@ export default function RoleDetailPage() {
           </Link>
         }
         title={role.title}
-        subtitle="Edit the role and its job description. Pipeline + candidates land here in v0.5."
-        actions={<Button icon={Save} onClick={() => save.mutate()} loading={save.isPending}>Save</Button>}
+        subtitle={[role.sr_number && `SR ${role.sr_number}`, role.level, role.location].filter(Boolean).join(' · ') || 'Role details'}
+        actions={
+          <>
+            <Button variant="secondary" icon={Plus} onClick={() => setImportOpen(true)}>Add candidate</Button>
+            <Button icon={Save} onClick={() => save.mutate()} loading={save.isPending}>Save role</Button>
+          </>
+        }
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2">
-          <div className="flex items-center gap-2 mb-3 text-slate-200">
-            <FileText size={16} className="text-indigo-300" /> <span className="font-medium">Job description</span>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2 text-slate-200">
+              <FileText size={16} className="text-indigo-300" />
+              <span className="font-medium">Job description</span>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" variant="ghost" icon={FileBox} onClick={() => setPickOpen(true)}>Use template</Button>
+              <Button size="sm" variant="ghost" icon={Upload} onClick={() => setUploadOpen(true)}>Upload</Button>
+            </div>
           </div>
-          <p className="text-xs text-slate-400 mb-2">
-            Plain-text for now. v0.5 swaps this for a rich-text editor and a JD template picker.
-          </p>
-          <textarea
-            value={draft.jd_html}
-            onChange={(e) => setDraft({ ...draft, jd_html: e.target.value })}
-            rows={20}
-            placeholder="Paste or write the job description here…"
-            className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono leading-relaxed"
-          />
+          <JDEditor value={draft.jd_html} onChange={(v) => setDraft({ ...draft, jd_html: v })} />
         </Card>
 
         <div className="space-y-4">
           <Card>
             <div className="flex items-center gap-2 mb-3 text-slate-200">
-              <Briefcase size={16} className="text-indigo-300" /> <span className="font-medium">Role details</span>
+              <Briefcase size={16} className="text-indigo-300" /><span className="font-medium">Role details</span>
             </div>
             <div className="space-y-3">
               <Field label="Title">
@@ -119,29 +151,84 @@ export default function RoleDetailPage() {
           </Card>
 
           <Card>
-            <div className="text-slate-200 font-medium mb-2">Pipeline stages</div>
-            <p className="text-xs text-slate-400 mb-3">
-              Default stages for this role. Per-role customization (skip / what-to-expect) lands in v0.5.
-            </p>
-            <ol className="space-y-1.5 text-sm">
-              {STAGES.map((s, i) => {
-                const cfg = stageConfig.find((c) => c.stage_key === s.key);
-                const enabled = cfg?.enabled !== false;
-                return (
-                  <li
-                    key={s.key}
-                    className={`flex items-center gap-2 ${enabled ? 'text-slate-200' : 'text-slate-500 line-through'}`}
-                  >
-                    <span className="w-5 text-[11px] text-slate-500">{i + 1}.</span>
-                    <span>{s.label}</span>
-                  </li>
-                );
-              })}
-            </ol>
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-slate-200 font-medium">Pipeline</div>
+              <Button size="sm" variant="ghost" icon={Sliders} onClick={() => setStageOpen(true)}>Customize</Button>
+            </div>
+            <PipelineSummary stageConfig={role.stage_config} />
           </Card>
         </div>
       </div>
+
+      <div className="mt-6">
+        <div className="text-sm font-medium text-slate-200 mb-2">Pipeline board</div>
+        <PipelineBoard roleId={roleId} stageConfig={role.stage_config} />
+      </div>
+
+      <JDTemplatePicker
+        open={pickOpen}
+        onClose={() => setPickOpen(false)}
+        onPick={(t) => setDraft((d) => ({ ...d, jd_html: t.body_html }))}
+      />
+
+      <StageCustomizer
+        open={stageOpen}
+        onClose={() => setStageOpen(false)}
+        roleId={roleId}
+        stageConfig={role.stage_config}
+      />
+
+      <CandidateImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        roleId={roleId}
+      />
+
+      <Modal
+        open={uploadOpen}
+        onClose={() => setUploadOpen(false)}
+        title="Upload JD file"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => { setUploadOpen(false); setJdFile(null); }}>Cancel</Button>
+            <Button onClick={() => upload.mutate()} loading={upload.isPending}>Upload + parse</Button>
+          </>
+        }
+      >
+        <p className="text-xs text-slate-400 mb-3">
+          We'll parse the file's text and replace the JD content. The original is saved in the <code className="text-slate-300">jds</code> bucket.
+        </p>
+        <FileDrop value={jdFile} onChange={setJdFile} />
+      </Modal>
     </>
+  );
+}
+
+function PipelineSummary({ stageConfig }) {
+  const cfg = Array.isArray(stageConfig) ? stageConfig : [];
+  const STAGES_ORDER = ['resume_submitted','hm_review','technical_written','technical_interview','problem_solving','case_study','offer'];
+  const labels = {
+    resume_submitted: 'Submitted',
+    hm_review: 'HM Review',
+    technical_written: 'Tech Written',
+    technical_interview: 'Tech Interview',
+    problem_solving: 'Problem Solving',
+    case_study: 'Case Study',
+    offer: 'Offer',
+  };
+  return (
+    <ul className="space-y-1 text-sm">
+      {STAGES_ORDER.map((k, i) => {
+        const item = cfg.find((c) => c.stage_key === k);
+        const enabled = item?.enabled !== false;
+        return (
+          <li key={k} className={`flex items-center gap-2 ${enabled ? 'text-slate-200' : 'text-slate-500 line-through'}`}>
+            <span className="w-5 text-[11px] text-slate-500">{i + 1}.</span>
+            <span>{labels[k]}</span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

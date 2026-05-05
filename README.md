@@ -4,18 +4,25 @@ A focused hiring tracker for managing requisitions, candidates, interview pipeli
 
 ## Status
 
-**v0.1 — walking skeleton.** What works today:
+**v1.0 — full feature set.** What works today:
 
 - Supabase auth (sign up, sign in, sign out, password reset).
-- Sidebar + dark-theme app shell, all routes wired.
-- Hiring Projects: list and create.
-- Project detail: list and create roles.
-- Role detail: edit title, SR number, level, location, JD (textarea).
-- JD Templates page: lists system templates seeded by SQL.
-- Settings: edit own profile (full name, role, timezone).
-- `/api/extract` ports ResumeScreener's PDF/DOCX/TXT extraction.
+- Sidebar + dark-theme app shell.
+- Hiring Projects: list, create, detail with roles.
+- Roles: edit details, **rich-text JD (Tiptap)**, JD upload (PDF/DOCX), JD template picker.
+- Per-role pipeline customization (toggle stages off, edit "what to expect").
+- Pipeline kanban board + per-role candidate view.
+- Candidates: upload resume OR paste LinkedIn URL OR manual entry. Auto-creates pipeline rows for every stage.
+- Candidate detail: pipeline timeline, advance/reject/skip, **AI scoring vs. JD** (Claude), interviewer assignment per round, feedback form (interviewers), feedback timeline (everyone), **AI committee brief** summarizing all feedback, comments thread.
+- Candidates page: filter by stage / status / role, search, CSV export.
+- My Interviews: pending + submitted feedback per interviewer.
+- Availability calendar: drag to create slots, click to remove.
+- Email notifications via Resend (stage change, rejection, feedback reminder, daily stale-candidate digest).
+- Daily Vercel cron flags stale candidates and emails project managers.
+- JD Templates page; Settings (profile self-edit).
+- `/api/extract`, `/api/upload-resume`, `/api/upload-jd`, `/api/score-candidate`, `/api/summarize-feedback`, `/api/cron-stale-candidates`.
 
-Coming in v0.5 / v1.0 (per the plan): rich-text JD editor, candidate upload + LinkedIn flow, full pipeline UI, interviewer assignments, feedback, availability calendar, AI scoring, AI feedback summarizer, comments, CSV export, Resend email notifications, stale-candidate cron.
+**Skipped by design:** schedule-interview booking flow + .ics export. Calendar is for marking availability only.
 
 ## Stack
 
@@ -42,6 +49,7 @@ Coming in v0.5 / v1.0 (per the plan): rich-text JD editor, candidate upload + Li
    - `0001_init.sql` — tables, indexes, profile auto-create trigger
    - `0002_rls.sql` — RLS policies (permissive for v0.1)
    - `0003_seed_templates.sql` — system JD templates
+   - `0004_v05_v10.sql` — tightens RLS to project membership, adds candidate_pipeline auto-creation trigger, adds audit-log triggers
 
 4. **Copy env**
 

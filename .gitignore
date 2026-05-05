@@ -11,3 +11,5 @@ dist
 
 # Reference JDs kept locally only — not committed.
 /*.pdf
+
+.vercel
