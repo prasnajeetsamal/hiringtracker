@@ -61,3 +61,11 @@ export async function generateJD(payload) {
 export async function summarizeFeedback({ candidateId }) {
   return req('/api/summarize-feedback', { method: 'POST', body: { candidateId } });
 }
+
+export async function inviteUser({ email, fullName, role }) {
+  return req('/api/invite-user', { method: 'POST', body: { email, fullName, role } });
+}
+
+export async function updateUserRole({ userId, role }) {
+  return req('/api/update-user-role', { method: 'POST', body: { userId, role } });
+}

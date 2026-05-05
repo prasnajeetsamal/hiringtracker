@@ -1,6 +1,7 @@
 // src/components/layout/Sidebar.jsx
 import React from 'react';
 import { NavLink } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard,
   FolderKanban,
@@ -10,18 +11,41 @@ import {
   FileText,
   ClipboardList,
   Sparkles,
+  UserCog,
 } from 'lucide-react';
 
-const items = [
+import { supabase } from '../../lib/supabase.js';
+import { useAuth } from '../../lib/AuthContext.jsx';
+
+const baseItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/projects', label: 'Hiring Projects', icon: FolderKanban },
   { to: '/candidates', label: 'Candidates', icon: Users },
   { to: '/calendar', label: 'Calendar', icon: CalendarDays },
-  { to: '/my-interviews', label: 'My Interviews', icon: ClipboardCheck },
+  { to: '/my-interviews', label: 'Interviews', icon: ClipboardCheck },
   { to: '/jd-templates', label: 'JD Templates', icon: FileText },
 ];
 
 export default function Sidebar() {
+  const { user } = useAuth();
+
+  // Show "People" only to admin / hiring_manager / hiring_team. Interviewers don't need it.
+  const { data: profile } = useQuery({
+    queryKey: ['profile-role', user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+      if (error) throw error;
+      return data;
+    },
+  });
+  const showPeople = profile?.role && ['admin', 'hiring_manager', 'hiring_team'].includes(profile.role);
+
+  const items = [
+    ...baseItems,
+    ...(showPeople ? [{ to: '/people', label: 'People', icon: UserCog }] : []),
+  ];
+
   return (
     <aside className="hidden md:flex md:flex-col w-60 shrink-0 border-r border-slate-800/80 bg-slate-950/60 backdrop-blur">
       <div className="px-5 py-5 border-b border-slate-800/60">
@@ -61,7 +85,7 @@ export default function Sidebar() {
         ))}
       </nav>
       <div className="px-5 py-3 border-t border-slate-800/60 text-[11px] text-slate-500">
-        v0.1 · walking skeleton
+        v1.0
       </div>
     </aside>
   );

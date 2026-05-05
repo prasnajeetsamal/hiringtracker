@@ -13,6 +13,7 @@ import CandidateDetailPage from '../../pages/CandidateDetailPage.jsx';
 import CalendarPage from '../../pages/CalendarPage.jsx';
 import MyInterviewsPage from '../../pages/MyInterviewsPage.jsx';
 import JDTemplatesPage from '../../pages/JDTemplatesPage.jsx';
+import PeoplePage from '../../pages/PeoplePage.jsx';
 import SettingsPage from '../../pages/SettingsPage.jsx';
 import NotFoundPage from '../../pages/NotFoundPage.jsx';
 
@@ -35,6 +36,7 @@ export default function AppShell() {
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/my-interviews" element={<MyInterviewsPage />} />
             <Route path="/jd-templates" element={<JDTemplatesPage />} />
+            <Route path="/people" element={<PeoplePage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
