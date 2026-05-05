@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --bg: 2 6 23;        /* slate-950 */
+  --bg-soft: 15 23 42; /* slate-900 */
+  --fg: 226 232 240;   /* slate-200 */
+}
+
+html, body, #root { height: 100%; }
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background:
+    radial-gradient(900px 500px at 8% -10%, rgba(99, 102, 241, 0.22), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(139, 92, 246, 0.20), transparent 60%),
+    radial-gradient(700px 500px at 50% 120%, rgba(236, 72, 153, 0.14), transparent 65%),
+    radial-gradient(800px 600px at 95% 90%, rgba(34, 211, 238, 0.10), transparent 65%),
+    linear-gradient(180deg, rgb(2 6 23) 0%, rgb(2 6 23) 100%);
+  background-attachment: fixed;
+  color: rgb(var(--fg));
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+}
+
+.gradient-border {
+  position: relative;
+  background-clip: padding-box;
+}
+.gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.45), rgba(139, 92, 246, 0.25), rgba(236, 72, 153, 0.30));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+}
+
+.text-gradient {
+  background: linear-gradient(120deg, #c7d2fe 0%, #ddd6fe 35%, #fbcfe8 70%, #c7d2fe 100%);
+  -webkit-background-clip: text;
+          background-clip: text;
+  color: transparent;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.25); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.45); }
+
+*:focus-visible {
+  outline: 2px solid rgb(129 140 248);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+select, input, textarea, button {
+  color-scheme: dark;
+}
+
+::selection {
+  background: rgba(129, 140, 248, 0.35);
+  color: white;
+}

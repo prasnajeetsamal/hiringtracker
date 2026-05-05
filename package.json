@@ -1,0 +1,42 @@
+{
+  "name": "slate",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "vercel-build": "vite build"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.105.1",
+    "@tanstack/react-query": "^5.55.4",
+    "@tiptap/extension-placeholder": "^2.6.6",
+    "@tiptap/react": "^2.6.6",
+    "@tiptap/starter-kit": "^2.6.6",
+    "busboy": "^1.6.0",
+    "clsx": "^2.1.1",
+    "date-fns": "^3.6.0",
+    "jose": "^6.2.3",
+    "lucide-react": "^0.453.0",
+    "mammoth": "^1.6.0",
+    "pdf-parse": "^1.1.1",
+    "react": "^18.3.1",
+    "react-big-calendar": "^1.13.4",
+    "react-dom": "^18.3.1",
+    "react-hot-toast": "^2.4.1",
+    "react-router-dom": "^6.26.2",
+    "resend": "^4.0.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.12",
+    "vite": "^5.4.8"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

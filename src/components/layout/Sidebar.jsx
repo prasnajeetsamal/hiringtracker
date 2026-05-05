@@ -1,0 +1,68 @@
+// src/components/layout/Sidebar.jsx
+import React from 'react';
+import { NavLink } from 'react-router-dom';
+import {
+  LayoutDashboard,
+  FolderKanban,
+  Users,
+  CalendarDays,
+  ClipboardCheck,
+  FileText,
+  ClipboardList,
+  Sparkles,
+} from 'lucide-react';
+
+const items = [
+  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/projects', label: 'Hiring Projects', icon: FolderKanban },
+  { to: '/candidates', label: 'Candidates', icon: Users },
+  { to: '/calendar', label: 'Calendar', icon: CalendarDays },
+  { to: '/my-interviews', label: 'My Interviews', icon: ClipboardCheck },
+  { to: '/jd-templates', label: 'JD Templates', icon: FileText },
+];
+
+export default function Sidebar() {
+  return (
+    <aside className="hidden md:flex md:flex-col w-60 shrink-0 border-r border-slate-800/80 bg-slate-950/60 backdrop-blur">
+      <div className="px-5 py-5 border-b border-slate-800/60">
+        <div className="flex items-center gap-2.5">
+          <div className="relative">
+            <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-indigo-500 via-violet-500 to-pink-500 blur-md opacity-50" />
+            <div className="relative w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 via-violet-500 to-pink-500 text-white grid place-items-center shadow-lg shadow-indigo-500/30">
+              <ClipboardList size={18} />
+            </div>
+          </div>
+          <div className="leading-tight">
+            <div className="text-base font-semibold tracking-tight text-gradient">Slate</div>
+            <div className="text-[11px] text-slate-500 flex items-center gap-1">
+              <Sparkles size={9} /> Hiring Tracker
+            </div>
+          </div>
+        </div>
+      </div>
+      <nav className="flex-1 px-3 py-4 space-y-0.5">
+        {items.map(({ to, label, icon: Icon, end }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={end}
+            className={({ isActive }) =>
+              [
+                'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition',
+                isActive
+                  ? 'bg-slate-800/80 text-slate-100 border border-slate-700/80'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40 border border-transparent',
+              ].join(' ')
+            }
+          >
+            <Icon size={16} />
+            <span>{label}</span>
+          </NavLink>
+        ))}
+      </nav>
+      <div className="px-5 py-3 border-t border-slate-800/60 text-[11px] text-slate-500">
+        v0.1 · walking skeleton
+      </div>
+    </aside>
+  );
+}
