@@ -36,18 +36,30 @@ export async function extractFiles(files) {
   return req('/api/extract', { method: 'POST', body: fd, isForm: true });
 }
 
-export async function uploadResume({ candidateId, file }) {
-  const fd = new FormData();
-  fd.append('file', file, file.name);
-  if (candidateId) fd.append('candidateId', candidateId);
-  return req('/api/upload-resume', { method: 'POST', body: fd, isForm: true });
-}
-
-export async function uploadJD({ roleId, file }) {
+export async function uploadResume({ file, roleId, candidateId, fullName, email, phone, linkedinUrl }) {
+  if (!file) throw new Error('uploadResume requires a file.');
   const fd = new FormData();
   fd.append('file', file, file.name);
   if (roleId) fd.append('roleId', roleId);
+  if (candidateId) fd.append('candidateId', candidateId);
+  if (fullName) fd.append('fullName', fullName);
+  if (email) fd.append('email', email);
+  if (phone) fd.append('phone', phone);
+  if (linkedinUrl) fd.append('linkedinUrl', linkedinUrl);
+  return req('/api/upload-resume', { method: 'POST', body: fd, isForm: true });
+}
+
+export async function uploadJD({ file, roleId }) {
+  if (!file) throw new Error('uploadJD requires a file.');
+  if (!roleId) throw new Error('uploadJD requires a roleId.');
+  const fd = new FormData();
+  fd.append('file', file, file.name);
+  fd.append('roleId', roleId);
   return req('/api/upload-jd', { method: 'POST', body: fd, isForm: true });
+}
+
+export async function createCandidate(payload) {
+  return req('/api/create-candidate', { method: 'POST', body: payload });
 }
 
 export async function scoreCandidate({ candidateId, roleId }) {

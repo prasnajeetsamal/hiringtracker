@@ -1,7 +1,8 @@
 // api/upload-jd.js
 // Upload a JD file (PDF/DOCX/TXT). Stores the original in Supabase Storage,
-// extracts text, and updates the role with jd_html (basic <p>-wrapped paragraphs)
-// + jd_file_id + jd_source='uploaded'.
+// extracts structured HTML (mammoth for DOCX; heuristic conversion for
+// PDF/TXT), and updates the role with jd_html + jd_file_id +
+// jd_source='uploaded'.
 //
 // Form fields:
 //   roleId  (required)
@@ -9,22 +10,8 @@ export const config = { runtime: 'nodejs' };
 
 import { requireAuth } from '../lib/auth.js';
 import { supabaseAdmin } from '../lib/supabase-admin.js';
-import { parseMultipart, extractText } from '../lib/parse-file.js';
+import { parseMultipart, extractHtml } from '../lib/parse-file.js';
 import { uploadToBucket } from '../lib/storage.js';
-
-const escapeHtml = (s) =>
-  String(s || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-
-const textToHtml = (text) => {
-  const paras = String(text || '')
-    .split(/\n{2,}/)
-    .map((p) => p.trim())
-    .filter(Boolean);
-  return paras.map((p) => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`).join('\n');
-};
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -47,7 +34,7 @@ export default async function handler(req, res) {
       return;
     }
 
-    const parsed = await extractText(file);
+    const parsed = await extractHtml(file);
     if (parsed.error) {
       res.status(400).json({ error: 'Could not parse file: ' + parsed.error });
       return;
@@ -82,7 +69,7 @@ export default async function handler(req, res) {
       return;
     }
 
-    const html = textToHtml(parsed.text || '');
+    const html = parsed.html || '';
 
     const { data: role, error: uErr } = await sb
       .from('roles')

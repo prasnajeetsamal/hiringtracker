@@ -6,8 +6,7 @@ import toast from 'react-hot-toast';
 import Modal from '../common/Modal.jsx';
 import Button from '../common/Button.jsx';
 import FileDrop from '../common/FileDrop.jsx';
-import { supabase } from '../../lib/supabase.js';
-import { uploadResume } from '../../lib/api.js';
+import { uploadResume, createCandidate } from '../../lib/api.js';
 
 const TABS = [
   { id: 'upload',   label: 'Upload resume', icon: FileUp },
@@ -38,23 +37,17 @@ export default function CandidateImportDialog({ open, onClose, roleId }) {
         if (!file) throw new Error('Please choose a resume file.');
         return uploadResume({ file, roleId, ...form });
       }
-      if (tab === 'linkedin') {
-        if (!form.linkedinUrl.trim()) throw new Error('Paste a LinkedIn URL.');
+      if (tab === 'linkedin' && !form.linkedinUrl.trim()) {
+        throw new Error('Paste a LinkedIn URL.');
       }
-      const { data, error } = await supabase
-        .from('candidates')
-        .insert({
-          role_id: roleId,
-          full_name: form.fullName.trim() || 'Unnamed candidate',
-          email: form.email.trim() || null,
-          phone: form.phone.trim() || null,
-          linkedin_url: form.linkedinUrl.trim() || null,
-          source: tab === 'linkedin' ? 'linkedin' : 'manual',
-        })
-        .select()
-        .single();
-      if (error) throw error;
-      return { candidate: data };
+      return createCandidate({
+        roleId,
+        fullName: form.fullName,
+        email: form.email,
+        phone: form.phone,
+        linkedinUrl: form.linkedinUrl,
+        source: tab === 'linkedin' ? 'linkedin' : 'manual',
+      });
     },
     onSuccess: () => {
       toast.success('Candidate added');
