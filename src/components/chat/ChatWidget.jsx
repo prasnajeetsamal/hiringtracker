@@ -27,22 +27,61 @@ function saveHistory(messages) {
   catch { /* ignore quota */ }
 }
 
-// Lightweight markdown-ish renderer: bold via **x**, lists via "- " or "* ",
-// candidate://id links converted to clickable spans, line breaks preserved.
+// Lightweight markdown-ish renderer.
+// Supports:
+//   - paragraphs, blank lines
+//   - headings (## / ###)
+//   - bullet lists (- / *) and numbered lists (1.)
+//   - **bold**, *italic*, `inline code`
+//   - candidate://id links rendered as clickable buttons
+//   - bare http(s) URLs auto-linked
 function renderRich(text, onCandidateClick) {
-  const blocks = text.split(/\n{2,}/);
+  const safe = String(text || '').replace(/\r\n?/g, '\n');
+  const blocks = safe.split(/\n{2,}/);
+
   return blocks.map((block, bi) => {
-    const lines = block.split('\n');
-    const isList = lines.every((l) => /^\s*[-*]\s+/.test(l)) && lines.length >= 2;
-    if (isList) {
+    const lines = block.split('\n').filter((l) => l.trim().length > 0);
+    if (lines.length === 0) return null;
+
+    // Heading
+    const h2 = lines.length === 1 && /^##\s+/.test(lines[0]);
+    const h3 = lines.length === 1 && /^###\s+/.test(lines[0]);
+    if (h2 || h3) {
+      const Tag = h2 ? 'h3' : 'h4';
+      const cls = h2 ? 'text-slate-100 font-semibold text-sm mt-2 mb-1' : 'text-slate-200 font-medium text-xs mt-2 mb-1';
+      return <Tag key={bi} className={cls}>{renderInline(lines[0].replace(/^#+\s+/, ''), onCandidateClick)}</Tag>;
+    }
+
+    // Bullet list
+    const bullet = lines.every((l) => /^\s*[-*]\s+/.test(l)) && lines.length >= 1;
+    if (bullet) {
       return (
-        <ul key={bi} className="list-disc list-inside space-y-0.5 my-1.5">
+        <ul key={bi} className="space-y-1 my-1.5">
           {lines.map((l, li) => (
-            <li key={li}>{renderInline(l.replace(/^\s*[-*]\s+/, ''), onCandidateClick)}</li>
+            <li key={li} className="flex gap-2 items-start">
+              <span className="text-slate-500 mt-1.5 inline-block w-1 h-1 rounded-full bg-slate-500 shrink-0" />
+              <span className="flex-1 min-w-0">
+                {renderInline(l.replace(/^\s*[-*]\s+/, ''), onCandidateClick)}
+              </span>
+            </li>
           ))}
         </ul>
       );
     }
+
+    // Numbered list
+    const numbered = lines.every((l) => /^\s*\d+[.)]\s+/.test(l)) && lines.length >= 1;
+    if (numbered) {
+      return (
+        <ol key={bi} className="space-y-1 my-1.5 list-decimal list-inside marker:text-slate-500">
+          {lines.map((l, li) => (
+            <li key={li}>{renderInline(l.replace(/^\s*\d+[.)]\s+/, ''), onCandidateClick)}</li>
+          ))}
+        </ol>
+      );
+    }
+
+    // Default paragraph
     return (
       <p key={bi} className="my-1.5">
         {lines.map((l, li) => (
@@ -56,29 +95,67 @@ function renderRich(text, onCandidateClick) {
   });
 }
 
+const INLINE_RE = new RegExp(
+  [
+    '\\[[^\\]]+\\]\\(candidate:\\/\\/[^)]+\\)',  // candidate links
+    '\\*\\*[^*]+\\*\\*',                          // **bold**
+    '`[^`]+`',                                    // `code`
+    '(?<!\\w)\\*[^*\\n]+\\*(?!\\w)',              // *italic* (avoid matching e.g. 2*x)
+    'https?:\\/\\/[^\\s)]+',                      // bare URLs
+  ].join('|'),
+  'g'
+);
+
 function renderInline(text, onCandidateClick) {
-  const re = /(\*\*[^*]+\*\*|\[[^\]]+\]\(candidate:\/\/[^)]+\))/g;
-  const parts = text.split(re);
-  return parts.map((p, i) => {
-    if (p.startsWith('**') && p.endsWith('**')) {
-      return <strong key={i} className="text-slate-100 font-semibold">{p.slice(2, -2)}</strong>;
-    }
-    const m = p.match(/^\[([^\]]+)\]\(candidate:\/\/([^)]+)\)$/);
-    if (m) {
-      const label = m[1];
-      const id = m[2];
-      return (
-        <button
-          key={i}
-          onClick={() => onCandidateClick(id)}
-          className="text-indigo-300 hover:text-indigo-200 underline underline-offset-2 decoration-dotted"
-        >
-          {label}
-        </button>
+  const out = [];
+  let last = 0;
+  let m;
+  let key = 0;
+  // We use exec rather than split to avoid regex-engine flakiness with the 'or' branches.
+  while ((m = INLINE_RE.exec(text)) !== null) {
+    if (m.index > last) out.push(<React.Fragment key={key++}>{text.slice(last, m.index)}</React.Fragment>);
+    const tok = m[0];
+    if (tok.startsWith('**') && tok.endsWith('**')) {
+      out.push(<strong key={key++} className="text-slate-100 font-semibold">{tok.slice(2, -2)}</strong>);
+    } else if (tok.startsWith('`') && tok.endsWith('`')) {
+      out.push(
+        <code key={key++} className="px-1 py-0.5 rounded bg-slate-950/60 border border-slate-700 text-[12px] text-indigo-200 font-mono">
+          {tok.slice(1, -1)}
+        </code>
       );
+    } else if (tok.startsWith('*') && tok.endsWith('*')) {
+      out.push(<em key={key++} className="text-slate-300 italic">{tok.slice(1, -1)}</em>);
+    } else if (tok.startsWith('[')) {
+      const link = tok.match(/^\[([^\]]+)\]\(candidate:\/\/([^)]+)\)$/);
+      if (link) {
+        const label = link[1];
+        const id = link[2];
+        // The label itself may contain **bold**, so render it recursively.
+        out.push(
+          <button
+            key={key++}
+            onClick={() => onCandidateClick(id)}
+            className="text-indigo-300 hover:text-indigo-200 underline underline-offset-2 decoration-dotted"
+          >
+            {renderInline(label, onCandidateClick)}
+          </button>
+        );
+      } else {
+        out.push(<React.Fragment key={key++}>{tok}</React.Fragment>);
+      }
+    } else if (tok.startsWith('http')) {
+      out.push(
+        <a key={key++} href={tok} target="_blank" rel="noreferrer" className="text-indigo-300 hover:text-indigo-200 underline underline-offset-2 decoration-dotted break-all">
+          {tok}
+        </a>
+      );
+    } else {
+      out.push(<React.Fragment key={key++}>{tok}</React.Fragment>);
     }
-    return <React.Fragment key={i}>{p}</React.Fragment>;
-  });
+    last = m.index + tok.length;
+  }
+  if (last < text.length) out.push(<React.Fragment key={key++}>{text.slice(last)}</React.Fragment>);
+  return out;
 }
 
 export default function ChatWidget() {

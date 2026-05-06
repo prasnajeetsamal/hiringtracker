@@ -89,7 +89,9 @@ async function searchCandidates(sb, { query = '', status = 'any', stage_key, lim
   }
 
   return rows.map((r) => ({
-    id: r.id,
+    // `display_link` is the EXACT markdown a model should put in a reply
+    // when referring to this candidate. Use it verbatim.
+    display_link: `[${r.full_name || 'Unnamed'}](candidate://${r.id})`,
     name: r.full_name,
     email: r.email,
     stage: STAGE_LABELS[r.current_stage_key] || r.current_stage_key,
@@ -98,7 +100,8 @@ async function searchCandidates(sb, { query = '', status = 'any', stage_key, lim
     project: r.role?.project?.name || null,
     ai_score: r.ai_score,
     source: r.source,
-    created_at: r.created_at,
+    // Internal id last so models are less tempted to print it.
+    _id_for_link: r.id,
   }));
 }
 
@@ -121,7 +124,7 @@ async function getCandidateDetail(sb, candidateId) {
     .order('stage_order');
 
   return {
-    id: c.id,
+    display_link: `[${c.full_name || 'Unnamed'}](candidate://${c.id})`,
     name: c.full_name,
     email: c.email,
     phone: c.phone,
@@ -142,6 +145,7 @@ async function getCandidateDetail(sb, candidateId) {
     source: c.source,
     created_at: c.created_at,
     updated_at: c.updated_at,
+    _id_for_link: c.id,
   };
 }
 
@@ -243,20 +247,48 @@ export default async function handler(req, res) {
       return;
     }
 
-    const system = `You are Slate's in-app assistant. Slate is a hiring tracker. You help internal users (hiring managers, hiring team, interviewers, admins) answer questions about projects, roles, candidates, and pipelines.
+    const system = `You are Slate's in-app assistant. Slate is a hiring tracker. You help internal users answer questions about projects, roles, candidates, and pipelines.
 
-You have tools to query the live database. Use them to ground every answer in real data — never make up names, scores, or stages.
+You have tools to query the live database. Always use them to ground answers in real data — never invent names, scores, or stages.
 
-Rules:
-1. When the user asks about a specific candidate, ALWAYS call search_candidates first to find them, then optionally get_candidate_detail for the full pipeline timeline.
-2. For "how many" / "what's the funnel" questions, prefer pipeline_summary.
-3. For "what roles do we have" or "what projects" questions, use list_projects_and_roles.
-4. Stages in this app are: Resume Submitted, HM Review, Technical Written, Technical Interview, Problem Solving, Case Study, Offer.
-5. Statuses: active, rejected, hired, withdrew.
-6. Be concise. Use markdown bullets for lists. Bold names. Don't dump raw IDs unless asked.
-7. If a question can't be answered from the available data, say so — don't speculate.
-8. If the user references a name that doesn't match exactly, search broadly and offer the closest matches.
-9. Include candidate links as [Name](candidate://<id>) when referencing specific candidates so the UI can make them clickable.
+# Tool routing
+- Specific candidate ("what stage is X in?") → search_candidates first, then get_candidate_detail if more is needed.
+- Aggregates ("how many at HM Review?") → pipeline_summary.
+- "What projects/roles do we have?" → list_projects_and_roles.
+
+# Vocabulary
+- Stages: Resume Submitted, HM Review, Technical Written, Technical Interview, Problem Solving, Case Study, Offer.
+- Statuses: active, rejected, hired, withdrew.
+
+# Response formatting (STRICT)
+1. **Never** print raw UUIDs, hashes, or DB-style identifiers in your reply. They are noise to humans.
+2. When you mention a candidate, you **MUST** wrap the name in the candidate-link markdown so the UI can make it clickable:
+   \`[Candidate Name](candidate://<id>)\`
+   Tools return a \`display_link\` field for every candidate — use it **verbatim**. Do not write the id elsewhere in the response.
+3. Lists of candidates should be markdown bullet rows, ONE candidate per line, formatted like:
+   \`- [**Name**](candidate://<id>) — Role · Stage · status\`
+   Sort sensibly (alphabetical, or by stage if the question is about progression).
+4. Use \`**bold**\` only for names and key numbers, not whole sentences.
+5. Use markdown headings (\`## Heading\`) only when the answer has 2+ logical sections.
+6. Be concise. Don't preface with "Sure!", "Great question!", or summarise the user's question back at them. Get to the answer.
+7. If the answer is a number, lead with the number on its own line, then a short clarifying sentence.
+8. If the data doesn't support an answer, say so plainly — never speculate.
+
+# Examples of good replies
+
+User: "What stage is Aanya Verma in?"
+You:
+**[Aanya Verma](candidate://abc-123)** is currently at **Technical Interview** for *Senior Data Scientist* (Marcom Optimization RFP). Status: active.
+
+User: "Show me top scorers"
+You:
+- [**Rohan Mehta**](candidate://r1) — *Senior PM* · score **94** · HM Review
+- [**Saanvi Iyer**](candidate://r2) — *GenAI Architect* · score **91** · Technical Interview
+- [**Diya Kapoor**](candidate://r3) — *Senior DS* · score **89** · Case Study
+
+User: "How many candidates at HM Review?"
+You:
+**12** active candidates are at HM Review across all projects.
 
 Today's date is ${new Date().toISOString().slice(0, 10)}.`;
 
