@@ -3,6 +3,7 @@ import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import Sidebar from './Sidebar.jsx';
 import UserMenu from './UserMenu.jsx';
+import ChatWidget from '../chat/ChatWidget.jsx';
 
 import DashboardPage from '../../pages/DashboardPage.jsx';
 import ProjectsPage from '../../pages/ProjectsPage.jsx';
@@ -42,6 +43,7 @@ export default function AppShell() {
           </Routes>
         </main>
       </div>
+      <ChatWidget />
     </div>
   );
 }

@@ -80,6 +80,10 @@ export async function cloneCandidate({ candidateId, targetRoleId }) {
   return req('/api/clone-candidate', { method: 'POST', body: { candidateId, targetRoleId } });
 }
 
+export async function askAssistant({ messages }) {
+  return req('/api/ask', { method: 'POST', body: { messages } });
+}
+
 export async function scoreCandidate({ candidateId, roleId }) {
   return req('/api/score-candidate', { method: 'POST', body: { candidateId, roleId } });
 }

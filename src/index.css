@@ -70,6 +70,11 @@ select, input, textarea, button {
   color: white;
 }
 
+/* Shimmer keyframes used by the Skeleton component for loading states */
+@keyframes shimmer {
+  100% { transform: translateX(100%); }
+}
+
 /* JD content (Tiptap output) — rendered both in the editor and read-only views */
 .jd-content h2, .jd-prose h2 {
   font-size: 1.05rem;

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Briefcase, ArrowLeft, ArrowRight, Trash2 } from 'lucide-react';
+import { Plus, Briefcase, ArrowLeft, ArrowRight, Trash2, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import PageHeader from '../components/common/PageHeader.jsx';
@@ -11,6 +11,7 @@ import Modal from '../components/common/Modal.jsx';
 import EmptyState from '../components/common/EmptyState.jsx';
 import Spinner from '../components/common/Spinner.jsx';
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx';
+import { SkeletonGrid } from '../components/common/Skeleton.jsx';
 import { supabase } from '../lib/supabase.js';
 import { defaultStageConfig } from '../lib/pipeline.js';
 import { deleteProject } from '../lib/api.js';
@@ -53,13 +54,21 @@ export default function ProjectDetailPage() {
   const { data: roles, isLoading: rolesLoading } = useQuery({
     queryKey: ['roles', projectId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('roles')
-        .select('id, sr_number, title, location, level, status, created_at')
-        .eq('project_id', projectId)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data;
+      const [rolesRes, candidatesRes] = await Promise.all([
+        supabase.from('roles')
+          .select('id, sr_number, title, location, level, status, created_at')
+          .eq('project_id', projectId)
+          .order('created_at', { ascending: false }),
+        supabase.from('candidates')
+          .select('id, role_id, status'),
+      ]);
+      if (rolesRes.error) throw rolesRes.error;
+      const counts = {};
+      (candidatesRes.data || []).forEach((c) => {
+        if (c.status !== 'active') return;
+        counts[c.role_id] = (counts[c.role_id] || 0) + 1;
+      });
+      return (rolesRes.data || []).map((r) => ({ ...r, activeCandidates: counts[r.id] || 0 }));
     },
   });
 
@@ -118,7 +127,7 @@ export default function ProjectDetailPage() {
       />
 
       {rolesLoading ? (
-        <Spinner />
+        <SkeletonGrid count={6} className="h-36" />
       ) : !roles?.length ? (
         <EmptyState
           icon={Briefcase}
@@ -128,26 +137,41 @@ export default function ProjectDetailPage() {
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {roles.map((r) => (
-            <Link key={r.id} to={`/projects/${projectId}/roles/${r.id}`} className="group">
-              <Card className="h-full hover:border-indigo-500/40 transition">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-base font-semibold text-slate-100 truncate">{r.title}</div>
-                    <div className="text-xs text-slate-400 mt-1 flex items-center gap-2 flex-wrap">
-                      {r.sr_number && <span className="font-mono">SR {r.sr_number}</span>}
-                      {r.level && <span>· {r.level}</span>}
-                      {r.location && <span>· {r.location}</span>}
+          {roles.map((r) => {
+            const STATUS_TONE = {
+              open:    'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
+              on_hold: 'bg-amber-500/10 text-amber-300 border-amber-500/30',
+              filled:  'bg-indigo-500/10 text-indigo-300 border-indigo-500/30',
+              closed:  'bg-slate-800 text-slate-400 border-slate-700',
+            };
+            const tone = STATUS_TONE[r.status] || STATUS_TONE.closed;
+            return (
+              <Link key={r.id} to={`/projects/${projectId}/roles/${r.id}`} className="group">
+                <Card className="h-full hover:border-indigo-500/40 hover:shadow-indigo-500/10 transition relative overflow-hidden">
+                  <div className="pointer-events-none absolute -top-12 -right-12 w-40 h-40 rounded-full bg-violet-500/10 blur-3xl group-hover:bg-violet-500/20 transition" />
+                  <div className="relative flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[10px] capitalize ${tone}`}>
+                        {r.status.replace('_', ' ')}
+                      </span>
+                      <div className="text-base font-semibold text-slate-100 mt-1.5 truncate">{r.title}</div>
+                      <div className="text-xs text-slate-400 mt-1 flex items-center gap-2 flex-wrap">
+                        {r.sr_number && <span className="font-mono">SR {r.sr_number}</span>}
+                        {r.level && <span>· {r.level}</span>}
+                        {r.location && <span>· {r.location}</span>}
+                      </div>
                     </div>
+                    <ArrowRight size={16} className="text-slate-500 group-hover:text-indigo-300 group-hover:translate-x-0.5 transition shrink-0 mt-1" />
                   </div>
-                  <ArrowRight size={16} className="text-slate-500 group-hover:text-indigo-300 transition shrink-0 mt-1" />
-                </div>
-                <div className="mt-4 text-[11px] text-slate-500 capitalize">
-                  status: {r.status}
-                </div>
-              </Card>
-            </Link>
-          ))}
+                  <div className="relative mt-4 pt-3 border-t border-slate-800/60 flex items-center gap-1.5 text-xs text-slate-300">
+                    <Users size={11} className="text-emerald-300" />
+                    <span className="font-semibold text-slate-100 tabular-nums">{r.activeCandidates}</span>
+                    <span className="text-slate-500">active {r.activeCandidates === 1 ? 'candidate' : 'candidates'}</span>
+                  </div>
+                </Card>
+              </Link>
+            );
+          })}
         </div>
       )}
 

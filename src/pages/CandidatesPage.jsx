@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Users, Download, Star, ArrowRight, Trash2 } from 'lucide-react';
+import { Users, Download, Star, ArrowRight, Trash2, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import PageHeader from '../components/common/PageHeader.jsx';
@@ -12,6 +12,7 @@ import EmptyState from '../components/common/EmptyState.jsx';
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx';
 import StageBadge from '../components/candidates/StageBadge.jsx';
 import RecommendationBadge from '../components/candidates/RecommendationBadge.jsx';
+import CandidateImportDialog from '../components/candidates/CandidateImportDialog.jsx';
 import { supabase } from '../lib/supabase.js';
 import { STAGES } from '../lib/pipeline.js';
 import { useIsAdmin } from '../lib/useIsAdmin.js';
@@ -33,6 +34,7 @@ export default function CandidatesPage() {
   const [statusFilter, setStatusFilter] = useState('active');
   const [roleFilter, setRoleFilter] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(null); // candidate row or null
+  const [importOpen, setImportOpen] = useState(false);
 
   const remove = useMutation({
     mutationFn: async (id) => deleteCandidate({ candidateId: id }),
@@ -103,11 +105,14 @@ export default function CandidatesPage() {
     <>
       <PageHeader
         title="Candidates"
-        subtitle="All candidates across roles. Filter, then export to CSV."
+        subtitle="All candidates across roles. Add, filter, export."
         actions={
-          <Button icon={Download} variant="secondary" onClick={downloadCSV} disabled={filtered.length === 0}>
-            Export CSV ({filtered.length})
-          </Button>
+          <>
+            <Button icon={Plus} onClick={() => setImportOpen(true)}>Add candidate</Button>
+            <Button icon={Download} variant="secondary" onClick={downloadCSV} disabled={filtered.length === 0}>
+              Export CSV ({filtered.length})
+            </Button>
+          </>
         }
       />
 
@@ -150,8 +155,13 @@ export default function CandidatesPage() {
       ) : filtered.length === 0 ? (
         <EmptyState
           icon={Users}
-          title="No candidates match"
-          description="Try clearing filters, or add candidates from a role page."
+          title={(candidates?.length || 0) === 0 ? 'No candidates yet' : 'No candidates match'}
+          description={(candidates?.length || 0) === 0
+            ? 'Click "Add candidate" above to upload a resume, paste a LinkedIn URL, or enter manually.'
+            : 'Try clearing filters or changing the search term.'}
+          action={(candidates?.length || 0) === 0
+            ? <Button icon={Plus} onClick={() => setImportOpen(true)}>Add candidate</Button>
+            : undefined}
         />
       ) : (
         <Card padding={false}>
@@ -232,6 +242,12 @@ export default function CandidatesPage() {
           </div>
         </Card>
       )}
+
+      <CandidateImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        // No roleId — dialog will show its own role picker
+      />
 
       <ConfirmDialog
         open={!!confirmDelete}

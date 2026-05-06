@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Save, Briefcase, FileText, Sliders, Plus, Upload, FileBox, Trash2 } from 'lucide-react';
+import { ArrowLeft, Save, Briefcase, FileText, Sliders, Upload, FileBox, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import PageHeader from '../components/common/PageHeader.jsx';
@@ -16,7 +16,6 @@ import JDEditor from '../components/jd/JDEditor.jsx';
 import JDTemplatePicker from '../components/jd/JDTemplatePicker.jsx';
 import PipelineBoard from '../components/pipeline/PipelineBoard.jsx';
 import StageCustomizer from '../components/pipeline/StageCustomizer.jsx';
-import CandidateImportDialog from '../components/candidates/CandidateImportDialog.jsx';
 
 import { supabase } from '../lib/supabase.js';
 import { uploadJD, deleteRole } from '../lib/api.js';
@@ -45,7 +44,6 @@ export default function RoleDetailPage() {
   const [draft, setDraft] = useState({ jd_html: '', sr_number: '', title: '', location: '', level: '' });
   const [pickOpen, setPickOpen] = useState(false);
   const [stageOpen, setStageOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [jdFile, setJdFile] = useState(null);
 
@@ -125,7 +123,6 @@ export default function RoleDetailPage() {
         subtitle={[role.sr_number && `SR ${role.sr_number}`, role.level, role.location].filter(Boolean).join(' · ') || 'Role details'}
         actions={
           <>
-            <Button variant="secondary" icon={Plus} onClick={() => setImportOpen(true)}>Add candidate</Button>
             <Button icon={Save} onClick={() => save.mutate()} loading={save.isPending}>Save role</Button>
             {isAdmin && (
               <Button variant="danger" icon={Trash2} onClick={() => setConfirmDeleteOpen(true)}>Delete role</Button>
@@ -196,12 +193,6 @@ export default function RoleDetailPage() {
         onClose={() => setStageOpen(false)}
         roleId={roleId}
         stageConfig={role.stage_config}
-      />
-
-      <CandidateImportDialog
-        open={importOpen}
-        onClose={() => setImportOpen(false)}
-        roleId={roleId}
       />
 
       <Modal
