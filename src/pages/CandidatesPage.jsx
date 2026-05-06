@@ -1,17 +1,21 @@
 import React, { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Users, Download, Star, ArrowRight } from 'lucide-react';
+import { Users, Download, Star, ArrowRight, Trash2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 import PageHeader from '../components/common/PageHeader.jsx';
 import Card from '../components/common/Card.jsx';
 import Button from '../components/common/Button.jsx';
 import Spinner from '../components/common/Spinner.jsx';
 import EmptyState from '../components/common/EmptyState.jsx';
+import ConfirmDialog from '../components/common/ConfirmDialog.jsx';
 import StageBadge from '../components/candidates/StageBadge.jsx';
 import RecommendationBadge from '../components/candidates/RecommendationBadge.jsx';
 import { supabase } from '../lib/supabase.js';
 import { STAGES } from '../lib/pipeline.js';
+import { useIsAdmin } from '../lib/useIsAdmin.js';
+import { deleteCandidate } from '../lib/api.js';
 
 const STATUS_OPTIONS = [
   { value: '',          label: 'All statuses' },
@@ -22,10 +26,24 @@ const STATUS_OPTIONS = [
 ];
 
 export default function CandidatesPage() {
+  const qc = useQueryClient();
+  const { isAdmin } = useIsAdmin();
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('active');
   const [roleFilter, setRoleFilter] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(null); // candidate row or null
+
+  const remove = useMutation({
+    mutationFn: async (id) => deleteCandidate({ candidateId: id }),
+    onSuccess: () => {
+      toast.success('Candidate deleted');
+      qc.invalidateQueries({ queryKey: ['candidates-all'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      setConfirmDelete(null);
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   const { data: candidates, isLoading } = useQuery({
     queryKey: ['candidates-all'],
@@ -148,6 +166,7 @@ export default function CandidatesPage() {
                   <th className="px-4 py-2.5 font-medium">AI</th>
                   <th className="px-4 py-2.5 font-medium">Source</th>
                   <th></th>
+                  {isAdmin && <th></th>}
                 </tr>
               </thead>
               <tbody>
@@ -195,6 +214,17 @@ export default function CandidatesPage() {
                         <ArrowRight size={14} />
                       </Link>
                     </td>
+                    {isAdmin && (
+                      <td className="px-4 py-2.5 text-right">
+                        <button
+                          onClick={() => setConfirmDelete(c)}
+                          className="text-slate-500 hover:text-rose-300 p-1 rounded transition"
+                          title="Delete candidate"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -202,6 +232,22 @@ export default function CandidatesPage() {
           </div>
         </Card>
       )}
+
+      <ConfirmDialog
+        open={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        onConfirm={() => remove.mutate(confirmDelete.id)}
+        loading={remove.isPending}
+        title="Delete candidate?"
+        message={
+          confirmDelete && (
+            <>
+              <p>This permanently removes <strong className="text-slate-100">{confirmDelete.full_name || 'this candidate'}</strong>, all their pipeline rows, feedback, comments, and the resume file in storage.</p>
+              <p className="mt-2 text-rose-300 text-xs">This cannot be undone.</p>
+            </>
+          )
+        }
+      />
     </>
   );
 }

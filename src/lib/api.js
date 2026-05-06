@@ -62,6 +62,22 @@ export async function createCandidate(payload) {
   return req('/api/create-candidate', { method: 'POST', body: payload });
 }
 
+export async function deleteCandidate({ candidateId }) {
+  return req('/api/delete-candidate', { method: 'POST', body: { candidateId } });
+}
+
+export async function deleteRole({ roleId }) {
+  return req('/api/delete-role', { method: 'POST', body: { roleId } });
+}
+
+export async function deleteProject({ projectId }) {
+  return req('/api/delete-project', { method: 'POST', body: { projectId } });
+}
+
+export async function cloneCandidate({ candidateId, targetRoleId }) {
+  return req('/api/clone-candidate', { method: 'POST', body: { candidateId, targetRoleId } });
+}
+
 export async function scoreCandidate({ candidateId, roleId }) {
   return req('/api/score-candidate', { method: 'POST', body: { candidateId, roleId } });
 }

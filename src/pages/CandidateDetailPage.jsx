@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft, ArrowRight, X, SkipForward, Sparkles, Star, Linkedin, Mail, Phone,
-  FileText, Wand2, MessageSquare,
+  ArrowLeft, ArrowRight, X, SkipForward, Sparkles, Linkedin, Mail, Phone,
+  FileText, Wand2, MessageSquare, Trash2, Copy,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -11,22 +11,29 @@ import PageHeader from '../components/common/PageHeader.jsx';
 import Card from '../components/common/Card.jsx';
 import Button from '../components/common/Button.jsx';
 import Spinner from '../components/common/Spinner.jsx';
+import ConfirmDialog from '../components/common/ConfirmDialog.jsx';
 import StageBadge from '../components/candidates/StageBadge.jsx';
 import RecommendationBadge from '../components/candidates/RecommendationBadge.jsx';
 import InterviewerAssignment from '../components/candidates/InterviewerAssignment.jsx';
+import ConsiderForRoleDialog from '../components/candidates/ConsiderForRoleDialog.jsx';
 import FeedbackForm from '../components/feedback/FeedbackForm.jsx';
 import FeedbackTimeline from '../components/feedback/FeedbackTimeline.jsx';
 import CommentThread from '../components/comments/CommentThread.jsx';
 
 import { supabase } from '../lib/supabase.js';
 import { useAuth } from '../lib/AuthContext.jsx';
-import { scoreCandidate, summarizeFeedback } from '../lib/api.js';
+import { useIsAdmin } from '../lib/useIsAdmin.js';
+import { scoreCandidate, summarizeFeedback, deleteCandidate } from '../lib/api.js';
 import { STAGE_BY_KEY, enabledStages } from '../lib/pipeline.js';
 
 export default function CandidateDetailPage() {
   const { candidateId } = useParams();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const { user } = useAuth();
+  const { isAdmin } = useIsAdmin();
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [considerOpen, setConsiderOpen] = useState(false);
 
   const { data: candidate, isLoading } = useQuery({
     queryKey: ['candidate', candidateId],
@@ -207,6 +214,36 @@ export default function CandidateDetailPage() {
     onError: (e) => toast.error(e.message),
   });
 
+  const remove = useMutation({
+    mutationFn: async () => deleteCandidate({ candidateId }),
+    onSuccess: () => {
+      toast.success('Candidate deleted');
+      qc.invalidateQueries({ queryKey: ['candidates-all'] });
+      qc.invalidateQueries({ queryKey: ['candidates', candidate?.role_id] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      navigate(candidate?.role?.project_id && candidate?.role_id
+        ? `/projects/${candidate.role.project_id}/roles/${candidate.role_id}`
+        : '/candidates');
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  // Sibling candidates (same person on other roles) — match by email when set.
+  const { data: siblings } = useQuery({
+    queryKey: ['siblings', candidate?.email, candidateId],
+    enabled: !!candidate?.email,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('candidates')
+        .select(`id, full_name, current_stage_key, status,
+          role:roles ( id, title, project_id, project:hiring_projects ( id, name ) )`)
+        .eq('email', candidate.email)
+        .neq('id', candidateId);
+      if (error) throw error;
+      return data;
+    },
+  });
+
   if (isLoading) return <Spinner />;
   if (!candidate) return <div className="text-slate-400">Candidate not found.</div>;
 
@@ -235,13 +272,19 @@ export default function CandidateDetailPage() {
           </span>
         }
         actions={
-          !isTerminal ? (
-            <>
-              <Button variant="ghost" icon={SkipForward} onClick={() => skip.mutate()} loading={skip.isPending}>Skip stage</Button>
-              <Button variant="danger" icon={X} onClick={() => reject.mutate()} loading={reject.isPending}>Reject</Button>
-              <Button icon={ArrowRight} onClick={() => advance.mutate()} loading={advance.isPending}>Advance</Button>
-            </>
-          ) : null
+          <>
+            <Button variant="ghost" icon={Copy} onClick={() => setConsiderOpen(true)}>Consider for another role</Button>
+            {!isTerminal && (
+              <>
+                <Button variant="ghost" icon={SkipForward} onClick={() => skip.mutate()} loading={skip.isPending}>Skip stage</Button>
+                <Button variant="danger" icon={X} onClick={() => reject.mutate()} loading={reject.isPending}>Reject</Button>
+                <Button icon={ArrowRight} onClick={() => advance.mutate()} loading={advance.isPending}>Advance</Button>
+              </>
+            )}
+            {isAdmin && (
+              <Button variant="danger" icon={Trash2} onClick={() => setConfirmDeleteOpen(true)}>Delete</Button>
+            )}
+          </>
         }
       />
 
@@ -382,6 +425,32 @@ export default function CandidateDetailPage() {
             </div>
           </Card>
 
+          {(siblings?.length || 0) > 0 && (
+            <Card>
+              <div className="flex items-center gap-2 text-slate-200 mb-3">
+                <Copy size={16} className="text-indigo-300" />
+                <span className="font-medium">Also considered as</span>
+              </div>
+              <div className="space-y-1.5">
+                {siblings.map((s) => (
+                  <Link
+                    key={s.id}
+                    to={`/candidates/${s.id}`}
+                    className="block px-2 -mx-2 py-1.5 rounded-md hover:bg-slate-900/40"
+                  >
+                    <div className="text-sm text-slate-100">{s.role?.title}</div>
+                    <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                      <span>{s.role?.project?.name}</span>
+                      <span>·</span>
+                      <StageBadge stageKey={s.current_stage_key} state="in_progress" size="sm" />
+                      {s.status !== 'active' && <span className="capitalize text-rose-300">{s.status}</span>}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </Card>
+          )}
+
           {candidate.resume_text && (
             <Card>
               <div className="flex items-center justify-between mb-3">
@@ -397,6 +466,26 @@ export default function CandidateDetailPage() {
           )}
         </div>
       </div>
+
+      <ConsiderForRoleDialog
+        open={considerOpen}
+        onClose={() => setConsiderOpen(false)}
+        candidate={candidate}
+      />
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        onClose={() => setConfirmDeleteOpen(false)}
+        onConfirm={() => remove.mutate()}
+        loading={remove.isPending}
+        title="Delete candidate?"
+        message={
+          <>
+            <p>This permanently removes <strong className="text-slate-100">{candidate.full_name || 'this candidate'}</strong>, all their pipeline rows, feedback, comments, and the resume file in storage.</p>
+            <p className="mt-2 text-rose-300 text-xs">This cannot be undone.</p>
+          </>
+        }
+      />
     </>
   );
 }

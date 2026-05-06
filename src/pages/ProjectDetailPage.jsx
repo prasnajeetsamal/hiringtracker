@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Briefcase, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Plus, Briefcase, ArrowLeft, ArrowRight, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import PageHeader from '../components/common/PageHeader.jsx';
@@ -10,14 +10,32 @@ import Button from '../components/common/Button.jsx';
 import Modal from '../components/common/Modal.jsx';
 import EmptyState from '../components/common/EmptyState.jsx';
 import Spinner from '../components/common/Spinner.jsx';
+import ConfirmDialog from '../components/common/ConfirmDialog.jsx';
 import { supabase } from '../lib/supabase.js';
 import { defaultStageConfig } from '../lib/pipeline.js';
+import { deleteProject } from '../lib/api.js';
+import { useIsAdmin } from '../lib/useIsAdmin.js';
 
 export default function ProjectDetailPage() {
   const { projectId } = useParams();
   const qc = useQueryClient();
+  const navigate = useNavigate();
+  const { isAdmin } = useIsAdmin();
   const [open, setOpen] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [form, setForm] = useState({ sr_number: '', title: '', location: '', level: '' });
+
+  const remove = useMutation({
+    mutationFn: async () => deleteProject({ projectId }),
+    onSuccess: () => {
+      toast.success('Project deleted');
+      qc.invalidateQueries({ queryKey: ['projects'] });
+      qc.invalidateQueries({ queryKey: ['candidates-all'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      navigate('/projects');
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   const { data: project, isLoading: projectLoading } = useQuery({
     queryKey: ['project', projectId],
@@ -87,7 +105,16 @@ export default function ProjectDetailPage() {
         }
         title={project.name}
         subtitle={project.description || 'Open roles for this hiring project.'}
-        actions={<Button icon={Plus} onClick={() => setOpen(true)}>New role</Button>}
+        actions={
+          <>
+            <Button icon={Plus} onClick={() => setOpen(true)}>New role</Button>
+            {isAdmin && (
+              <Button variant="danger" icon={Trash2} onClick={() => setConfirmDeleteOpen(true)}>
+                Delete project
+              </Button>
+            )}
+          </>
+        }
       />
 
       {rolesLoading ? (
@@ -152,6 +179,20 @@ export default function ProjectDetailPage() {
           </div>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        onClose={() => setConfirmDeleteOpen(false)}
+        onConfirm={() => remove.mutate()}
+        loading={remove.isPending}
+        title="Delete project?"
+        message={
+          <>
+            <p>This permanently removes <strong className="text-slate-100">{project.name}</strong>, every role within it, every candidate on those roles, all pipeline rows, feedback, comments, resume + JD files, and project memberships.</p>
+            <p className="mt-2 text-rose-300 text-xs">This cannot be undone.</p>
+          </>
+        }
+      />
     </>
   );
 }

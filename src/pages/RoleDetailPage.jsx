@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Save, Briefcase, FileText, Sliders, Plus, Upload, FileBox } from 'lucide-react';
+import { ArrowLeft, Save, Briefcase, FileText, Sliders, Plus, Upload, FileBox, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import PageHeader from '../components/common/PageHeader.jsx';
@@ -10,6 +10,7 @@ import Button from '../components/common/Button.jsx';
 import Modal from '../components/common/Modal.jsx';
 import FileDrop from '../components/common/FileDrop.jsx';
 import Spinner from '../components/common/Spinner.jsx';
+import ConfirmDialog from '../components/common/ConfirmDialog.jsx';
 
 import JDEditor from '../components/jd/JDEditor.jsx';
 import JDTemplatePicker from '../components/jd/JDTemplatePicker.jsx';
@@ -18,11 +19,15 @@ import StageCustomizer from '../components/pipeline/StageCustomizer.jsx';
 import CandidateImportDialog from '../components/candidates/CandidateImportDialog.jsx';
 
 import { supabase } from '../lib/supabase.js';
-import { uploadJD } from '../lib/api.js';
+import { uploadJD, deleteRole } from '../lib/api.js';
+import { useIsAdmin } from '../lib/useIsAdmin.js';
 
 export default function RoleDetailPage() {
   const { projectId, roleId } = useParams();
   const qc = useQueryClient();
+  const navigate = useNavigate();
+  const { isAdmin } = useIsAdmin();
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   const { data: role, isLoading } = useQuery({
     queryKey: ['role', roleId],
@@ -93,6 +98,18 @@ export default function RoleDetailPage() {
     onError: (e) => toast.error(e.message),
   });
 
+  const remove = useMutation({
+    mutationFn: async () => deleteRole({ roleId }),
+    onSuccess: () => {
+      toast.success('Role deleted');
+      qc.invalidateQueries({ queryKey: ['roles', projectId] });
+      qc.invalidateQueries({ queryKey: ['candidates-all'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      navigate(`/projects/${projectId}`);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   if (isLoading) return <Spinner />;
   if (!role) return <div className="text-slate-400">Role not found.</div>;
 
@@ -110,6 +127,9 @@ export default function RoleDetailPage() {
           <>
             <Button variant="secondary" icon={Plus} onClick={() => setImportOpen(true)}>Add candidate</Button>
             <Button icon={Save} onClick={() => save.mutate()} loading={save.isPending}>Save role</Button>
+            {isAdmin && (
+              <Button variant="danger" icon={Trash2} onClick={() => setConfirmDeleteOpen(true)}>Delete role</Button>
+            )}
           </>
         }
       />
@@ -200,6 +220,20 @@ export default function RoleDetailPage() {
         </p>
         <FileDrop value={jdFile} onChange={setJdFile} />
       </Modal>
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        onClose={() => setConfirmDeleteOpen(false)}
+        onConfirm={() => remove.mutate()}
+        loading={remove.isPending}
+        title="Delete role?"
+        message={
+          <>
+            <p>This permanently removes <strong className="text-slate-100">{role.title}</strong>, every candidate on this role, and all their pipeline rows, feedback, comments, resume files, and the JD file.</p>
+            <p className="mt-2 text-rose-300 text-xs">This cannot be undone.</p>
+          </>
+        }
+      />
     </>
   );
 }
