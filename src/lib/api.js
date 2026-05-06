@@ -62,16 +62,18 @@ export async function createCandidate(payload) {
   return req('/api/create-candidate', { method: 'POST', body: payload });
 }
 
+// Consolidated admin-delete endpoint (one Vercel function for all 3 delete
+// flavors so we stay under the Hobby plan's 12-function limit).
 export async function deleteCandidate({ candidateId }) {
-  return req('/api/delete-candidate', { method: 'POST', body: { candidateId } });
+  return req('/api/admin-delete', { method: 'POST', body: { entityType: 'candidate', id: candidateId } });
 }
 
 export async function deleteRole({ roleId }) {
-  return req('/api/delete-role', { method: 'POST', body: { roleId } });
+  return req('/api/admin-delete', { method: 'POST', body: { entityType: 'role', id: roleId } });
 }
 
 export async function deleteProject({ projectId }) {
-  return req('/api/delete-project', { method: 'POST', body: { projectId } });
+  return req('/api/admin-delete', { method: 'POST', body: { entityType: 'project', id: projectId } });
 }
 
 export async function cloneCandidate({ candidateId, targetRoleId }) {
