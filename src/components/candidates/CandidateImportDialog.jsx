@@ -49,10 +49,20 @@ export default function CandidateImportDialog({ open, onClose, roleId }) {
         source: tab === 'linkedin' ? 'linkedin' : 'manual',
       });
     },
-    onSuccess: () => {
-      toast.success('Candidate added');
-      qc.invalidateQueries({ queryKey: ['candidates', roleId] });
-      qc.invalidateQueries({ queryKey: ['candidates-all'] });
+    onSuccess: async (result) => {
+      const candidate = result?.candidate;
+      // Force an immediate refetch (not just invalidate-on-stale) so the new
+      // candidate appears without the user having to refresh.
+      await Promise.all([
+        qc.refetchQueries({ queryKey: ['candidates', roleId], exact: true }),
+        qc.refetchQueries({ queryKey: ['candidates-all'], exact: true }),
+        qc.invalidateQueries({ queryKey: ['dashboard'] }),
+      ]);
+      if (candidate?.full_name) {
+        toast.success(`Added ${candidate.full_name}`);
+      } else {
+        toast.success('Candidate added');
+      }
       close();
     },
     onError: (e) => toast.error(e.message),
