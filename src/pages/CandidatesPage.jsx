@@ -32,6 +32,7 @@ export default function CandidatesPage() {
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('active');
+  const [projectFilter, setProjectFilter] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(null); // candidate row or null
   const [importOpen, setImportOpen] = useState(false);
@@ -68,12 +69,38 @@ export default function CandidatesPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('roles')
-        .select('id, title, project:hiring_projects ( name )')
+        .select('id, title, project_id, project:hiring_projects ( id, name )')
         .order('title');
       if (error) throw error;
       return data;
     },
   });
+
+  const { data: projects } = useQuery({
+    queryKey: ['projects-flat'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('hiring_projects')
+        .select('id, name')
+        .order('name');
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Roles dropdown is filtered by the selected project (if any).
+  const rolesForProject = useMemo(() => {
+    if (!projectFilter) return roles || [];
+    return (roles || []).filter((r) => r.project_id === projectFilter);
+  }, [roles, projectFilter]);
+
+  // Whenever the project filter changes, reset role filter if it's no longer valid.
+  React.useEffect(() => {
+    if (roleFilter && !rolesForProject.some((r) => r.id === roleFilter)) {
+      setRoleFilter('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectFilter]);
 
   const filtered = useMemo(() => {
     return (candidates || []).filter((c) => {
@@ -84,10 +111,11 @@ export default function CandidatesPage() {
       }
       if (stageFilter && c.current_stage_key !== stageFilter) return false;
       if (statusFilter && c.status !== statusFilter) return false;
+      if (projectFilter && c.role?.project_id !== projectFilter) return false;
       if (roleFilter && c.role_id !== roleFilter) return false;
       return true;
     });
-  }, [candidates, search, stageFilter, statusFilter, roleFilter]);
+  }, [candidates, search, stageFilter, statusFilter, projectFilter, roleFilter]);
 
   const csv = useMemo(() => buildCSV(filtered), [filtered]);
 
@@ -117,12 +145,12 @@ export default function CandidatesPage() {
       />
 
       <Card className="mb-4" padding={false}>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 p-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 p-3">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search name, email, role…"
-            className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            placeholder="Search name, email…"
+            className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 lg:col-span-1"
           />
           <select
             value={statusFilter}
@@ -140,12 +168,24 @@ export default function CandidatesPage() {
             {STAGES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
           </select>
           <select
+            value={projectFilter}
+            onChange={(e) => setProjectFilter(e.target.value)}
+            className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="">All projects</option>
+            {(projects || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <select
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value)}
             className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
-            <option value="">All roles</option>
-            {(roles || []).map((r) => <option key={r.id} value={r.id}>{r.title}{r.project?.name ? ` — ${r.project.name}` : ''}</option>)}
+            <option value="">All roles{projectFilter ? ' (in selected project)' : ''}</option>
+            {rolesForProject.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.title}{!projectFilter && r.project?.name ? ` — ${r.project.name}` : ''}
+              </option>
+            ))}
           </select>
         </div>
       </Card>

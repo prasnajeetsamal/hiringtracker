@@ -27,16 +27,55 @@ function saveHistory(messages) {
   catch { /* ignore quota */ }
 }
 
-// Lightweight markdown-ish renderer.
+// Markdown-ish renderer for the assistant's replies.
+//
 // Supports:
-//   - paragraphs, blank lines
+//   - paragraphs, blank-line separation
 //   - headings (## / ###)
-//   - bullet lists (- / *) and numbered lists (1.)
+//   - bullet lists (- / * / • / · / ○ / ●) and numbered lists (1.)
 //   - **bold**, *italic*, `inline code`
-//   - candidate://id links rendered as clickable buttons
+//   - [name](candidate://id) → clickable button (URL is hidden)
 //   - bare http(s) URLs auto-linked
-function renderRich(text, onCandidateClick) {
-  const safe = String(text || '').replace(/\r\n?/g, '\n');
+//
+// Defensive belt-and-braces: even if Claude emits a bare `candidate://<id>`
+// outside a markdown link, we strip it so users never see UUIDs.
+
+const BULLET_RE = /^\s*(?:[-*•·○●▪■])\s+/;
+const NUM_BULLET_RE = /^\s*\d+[.)]\s+/;
+
+// Strip orphan `candidate://<uuid>` strings that aren't already inside a
+// markdown link target. Keeps the inline link form intact.
+function sanitizeOrphanCandidateUrls(text) {
+  let out = '';
+  let i = 0;
+  while (i < text.length) {
+    // If we encounter a `[...](candidate://...)`, copy it intact.
+    const linkMatch = text.slice(i).match(/^\[[^\]]+\]\(candidate:\/\/[^)]+\)/);
+    if (linkMatch) {
+      out += linkMatch[0];
+      i += linkMatch[0].length;
+      continue;
+    }
+    // Otherwise check for a bare URL and skip it (replace with nothing).
+    const orphan = text.slice(i).match(/^candidate:\/\/[A-Za-z0-9-]+/);
+    if (orphan) {
+      i += orphan[0].length;
+      // Also swallow a leading `(` and trailing `)` if it was wrapped.
+      if (out.endsWith('(') && text[i] === ')') {
+        out = out.slice(0, -1);
+        i += 1;
+      }
+      continue;
+    }
+    out += text[i];
+    i += 1;
+  }
+  // Collapse any double-spaces left behind.
+  return out.replace(/[ \t]{2,}/g, ' ');
+}
+
+export function renderRich(text, onCandidateClick) {
+  const safe = sanitizeOrphanCandidateUrls(String(text || '').replace(/\r\n?/g, '\n'));
   const blocks = safe.split(/\n{2,}/);
 
   return blocks.map((block, bi) => {
@@ -53,15 +92,14 @@ function renderRich(text, onCandidateClick) {
     }
 
     // Bullet list
-    const bullet = lines.every((l) => /^\s*[-*]\s+/.test(l)) && lines.length >= 1;
-    if (bullet) {
+    if (lines.every((l) => BULLET_RE.test(l)) && lines.length >= 1) {
       return (
         <ul key={bi} className="space-y-1 my-1.5">
           {lines.map((l, li) => (
             <li key={li} className="flex gap-2 items-start">
-              <span className="text-slate-500 mt-1.5 inline-block w-1 h-1 rounded-full bg-slate-500 shrink-0" />
+              <span className="text-indigo-400 mt-1.5 inline-block w-1.5 h-1.5 rounded-full bg-indigo-400/80 shrink-0" />
               <span className="flex-1 min-w-0">
-                {renderInline(l.replace(/^\s*[-*]\s+/, ''), onCandidateClick)}
+                {renderInline(l.replace(BULLET_RE, ''), onCandidateClick)}
               </span>
             </li>
           ))}
@@ -70,12 +108,11 @@ function renderRich(text, onCandidateClick) {
     }
 
     // Numbered list
-    const numbered = lines.every((l) => /^\s*\d+[.)]\s+/.test(l)) && lines.length >= 1;
-    if (numbered) {
+    if (lines.every((l) => NUM_BULLET_RE.test(l)) && lines.length >= 1) {
       return (
         <ol key={bi} className="space-y-1 my-1.5 list-decimal list-inside marker:text-slate-500">
           {lines.map((l, li) => (
-            <li key={li}>{renderInline(l.replace(/^\s*\d+[.)]\s+/, ''), onCandidateClick)}</li>
+            <li key={li}>{renderInline(l.replace(NUM_BULLET_RE, ''), onCandidateClick)}</li>
           ))}
         </ol>
       );
@@ -95,24 +132,24 @@ function renderRich(text, onCandidateClick) {
   });
 }
 
-const INLINE_RE = new RegExp(
-  [
-    '\\[[^\\]]+\\]\\(candidate:\\/\\/[^)]+\\)',  // candidate links
-    '\\*\\*[^*]+\\*\\*',                          // **bold**
-    '`[^`]+`',                                    // `code`
-    '(?<!\\w)\\*[^*\\n]+\\*(?!\\w)',              // *italic* (avoid matching e.g. 2*x)
-    'https?:\\/\\/[^\\s)]+',                      // bare URLs
-  ].join('|'),
-  'g'
-);
-
 function renderInline(text, onCandidateClick) {
+  // Fresh regex each call so we never share lastIndex across renders.
+  const re = new RegExp(
+    [
+      String.raw`\[[^\]]+\]\(candidate:\/\/[^)]+\)`,    // candidate links
+      String.raw`\*\*[^*]+\*\*`,                        // **bold**
+      String.raw`\`[^\`]+\``,                           // `code`
+      String.raw`(?<!\w)\*[^*\n]+\*(?!\w)`,             // *italic*
+      String.raw`https?:\/\/[^\s)]+`,                   // bare URLs
+    ].join('|'),
+    'g'
+  );
+
   const out = [];
   let last = 0;
   let m;
   let key = 0;
-  // We use exec rather than split to avoid regex-engine flakiness with the 'or' branches.
-  while ((m = INLINE_RE.exec(text)) !== null) {
+  while ((m = re.exec(text)) !== null) {
     if (m.index > last) out.push(<React.Fragment key={key++}>{text.slice(last, m.index)}</React.Fragment>);
     const tok = m[0];
     if (tok.startsWith('**') && tok.endsWith('**')) {
@@ -130,12 +167,12 @@ function renderInline(text, onCandidateClick) {
       if (link) {
         const label = link[1];
         const id = link[2];
-        // The label itself may contain **bold**, so render it recursively.
         out.push(
           <button
             key={key++}
             onClick={() => onCandidateClick(id)}
-            className="text-indigo-300 hover:text-indigo-200 underline underline-offset-2 decoration-dotted"
+            title="Open candidate"
+            className="inline-flex items-center text-indigo-300 hover:text-indigo-200 underline underline-offset-2 decoration-dotted"
           >
             {renderInline(label, onCandidateClick)}
           </button>
