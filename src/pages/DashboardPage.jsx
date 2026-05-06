@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
@@ -15,6 +15,7 @@ import PageHeader from '../components/common/PageHeader.jsx';
 import Card from '../components/common/Card.jsx';
 import Button from '../components/common/Button.jsx';
 import Spinner from '../components/common/Spinner.jsx';
+import FilterBar, { FilterSelect } from '../components/common/FilterBar.jsx';
 import StageBadge from '../components/candidates/StageBadge.jsx';
 import RecommendationBadge from '../components/candidates/RecommendationBadge.jsx';
 import HeroCard from '../components/dashboard/HeroCard.jsx';
@@ -30,9 +31,12 @@ const STALE_DAYS = 7;
 
 // ─── data ─────────────────────────────────────────────────────────────
 
-function useDashboardData(userId) {
+function useDashboardData(userId, filters) {
+  const projectId = filters?.projectId || '';
+  const roleId = filters?.roleId || '';
+
   return useQuery({
-    queryKey: ['dashboard', userId],
+    queryKey: ['dashboard', userId, projectId, roleId],
     enabled: !!userId,
     queryFn: async () => {
       const since = new Date(Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000).toISOString();
@@ -40,7 +44,7 @@ function useDashboardData(userId) {
 
       const [
         projectsAgg, rolesAgg, candidatesAll, myAssignments, pipelineRows,
-        recentCandidates, topCandidates, recentAudit, profileRow,
+        recentAudit, profileRow,
       ] = await Promise.all([
         supabase.from('hiring_projects').select('id, name, status'),
         supabase.from('roles').select('id, project_id, status'),
@@ -50,17 +54,7 @@ function useDashboardData(userId) {
           role:roles ( id, title, project_id, project:hiring_projects ( id, name ) )
         `),
         supabase.from('interviewer_assignments').select('id, pipeline_id').eq('interviewer_id', userId),
-        supabase.from('candidate_pipeline').select('id, stage_key, state'),
-        supabase.from('candidates')
-          .select(`id, full_name, email, current_stage_key, status, source, created_at, role:roles ( id, title )`)
-          .order('created_at', { ascending: false })
-          .limit(6),
-        supabase.from('candidates')
-          .select(`id, full_name, ai_score, ai_analysis, current_stage_key, status, role:roles ( id, title )`)
-          .eq('status', 'active')
-          .not('ai_score', 'is', null)
-          .order('ai_score', { ascending: false })
-          .limit(5),
+        supabase.from('candidate_pipeline').select('id, candidate_id, stage_key, state'),
         supabase.from('audit_log')
           .select(`id, action, entity_type, entity_id, before, after, created_at,
                    actor:profiles!audit_log_actor_id_fkey ( id, full_name, email )`)
@@ -68,6 +62,30 @@ function useDashboardData(userId) {
           .limit(10),
         supabase.from('profiles').select('full_name, email').eq('id', userId).single(),
       ]);
+
+      // Apply filters client-side so we can also filter pipeline rows etc.
+      const allCandidatesRaw = candidatesAll.data || [];
+      const passesFilter = (c) => {
+        if (projectId && c.role?.project_id !== projectId) return false;
+        if (roleId && c.role_id !== roleId) return false;
+        return true;
+      };
+      const allCandidates = allCandidatesRaw.filter(passesFilter);
+      const candidateIdSet = new Set(allCandidates.map((c) => c.id));
+      const filteredPipelineRows = (pipelineRows.data || []).filter((p) =>
+        candidateIdSet.has(p.candidate_id)
+      );
+
+      // Recently added (filtered set, top 6 by created_at)
+      const recentCandidatesArr = [...allCandidates]
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .slice(0, 6);
+
+      // Top scoring (filtered active set with ai_score, top 5)
+      const topCandidatesArr = allCandidates
+        .filter((c) => c.status === 'active' && typeof c.ai_score === 'number')
+        .sort((a, b) => (b.ai_score || 0) - (a.ai_score || 0))
+        .slice(0, 5);
 
       let pendingFeedback = 0;
       const pipelineIds = (myAssignments.data || []).map((a) => a.pipeline_id);
@@ -81,7 +99,6 @@ function useDashboardData(userId) {
         pendingFeedback = pipelineIds.filter((id) => !submitted.has(id)).length;
       }
 
-      const allCandidates = candidatesAll.data || [];
       const activeCandidates = allCandidates.filter((c) => c.status === 'active');
       const hiredCount = allCandidates.filter((c) => c.status === 'hired').length;
       const rejectedCount = allCandidates.filter((c) => c.status === 'rejected').length;
@@ -93,7 +110,7 @@ function useDashboardData(userId) {
         currentByStage[k] = (currentByStage[k] || 0) + 1;
       });
       const everReachedByStage = {};
-      (pipelineRows.data || []).forEach((row) => {
+      filteredPipelineRows.forEach((row) => {
         if (['in_progress', 'passed', 'skipped'].includes(row.state)) {
           everReachedByStage[row.stage_key] = (everReachedByStage[row.stage_key] || 0) + 1;
         }
@@ -135,11 +152,21 @@ function useDashboardData(userId) {
       const candidatesThisWeek = dayBuckets.slice(7).reduce((a, b) => a + b, 0);
       const candidatesPrevWeek = dayBuckets.slice(0, 7).reduce((a, b) => a + b, 0);
 
+      // Open roles: scope to project filter when active
+      const openRolesArr = (rolesAgg.data || []).filter((r) => {
+        if (r.status !== 'open') return false;
+        if (projectId && r.project_id !== projectId) return false;
+        return true;
+      });
+
       return {
         profile: profileRow.data,
+        // Lookups for the filter dropdown
+        projects: (projectsAgg.data || []).filter((p) => p.status === 'active'),
+        roles: rolesAgg.data || [],
         kpis: {
           activeProjects: (projectsAgg.data || []).filter((p) => p.status === 'active').length,
-          openRoles: (rolesAgg.data || []).filter((r) => r.status === 'open').length,
+          openRoles: openRolesArr.length,
           activeCandidates: activeCandidates.length,
           pendingFeedback,
           hiredCount,
@@ -150,8 +177,8 @@ function useDashboardData(userId) {
         },
         currentByStage,
         everReachedByStage,
-        recentCandidates: recentCandidates.data || [],
-        topCandidates: topCandidates.data || [],
+        recentCandidates: recentCandidatesArr,
+        topCandidates: topCandidatesArr,
         stale,
         topRoles,
         recentAudit: recentAudit.data || [],
@@ -324,19 +351,78 @@ function SeedDataCallout({ visible }) {
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const { data, isLoading } = useDashboardData(user?.id);
+  const [projectFilter, setProjectFilter] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+
+  const { data, isLoading } = useDashboardData(user?.id, {
+    projectId: projectFilter,
+    roleId: roleFilter,
+  });
+
+  // Roles in the dropdown should narrow when a project is picked.
+  const rolesForProject = useMemo(() => {
+    if (!projectFilter) return data?.roles || [];
+    return (data?.roles || []).filter((r) => r.project_id === projectFilter);
+  }, [data?.roles, projectFilter]);
+
+  // If the role filter no longer fits the selected project, clear it.
+  useEffect(() => {
+    if (roleFilter && !rolesForProject.some((r) => r.id === roleFilter)) {
+      setRoleFilter('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectFilter]);
 
   if (isLoading) return <Spinner />;
 
   const k = data?.kpis || {};
   const conversion = k.totalCandidates ? Math.round((k.hiredCount / k.totalCandidates) * 100) : 0;
-  const isEmpty = (k.totalCandidates ?? 0) === 0;
+  const isEmpty = (k.totalCandidates ?? 0) === 0 && !projectFilter && !roleFilter;
+
+  const projectName = (data?.projects || []).find((p) => p.id === projectFilter)?.name;
+  const roleTitle = (data?.roles || []).find((r) => r.id === roleFilter)?.title;
+  const filterCount = (projectFilter ? 1 : 0) + (roleFilter ? 1 : 0);
 
   return (
     <>
       <HeroCard name={data?.profile?.full_name || data?.profile?.email} kpis={k} />
 
       <SeedDataCallout visible={isEmpty} />
+
+      <FilterBar
+        activeCount={filterCount}
+        onClearAll={() => { setProjectFilter(''); setRoleFilter(''); }}
+      >
+        <FilterSelect
+          label="Project"
+          value={projectFilter}
+          onChange={setProjectFilter}
+          options={[
+            { value: '', label: 'All projects' },
+            ...(data?.projects || []).map((p) => ({ value: p.id, label: p.name })),
+          ]}
+        />
+        <FilterSelect
+          label="Role"
+          value={roleFilter}
+          onChange={setRoleFilter}
+          options={[
+            { value: '', label: projectFilter ? 'All roles in project' : 'All roles' },
+            ...rolesForProject.map((r) => {
+              const pName = (data?.projects || []).find((p) => p.id === r.project_id)?.name;
+              return {
+                value: r.id,
+                label: !projectFilter && pName ? `${r.title} — ${pName}` : r.title,
+              };
+            }),
+          ]}
+        />
+        {filterCount > 0 && (
+          <div className="text-[11px] text-slate-400 px-2">
+            Viewing: {[projectName, roleTitle].filter(Boolean).join(' · ')}
+          </div>
+        )}
+      </FilterBar>
 
       {/* KPI grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 auto-rows-fr mb-5">

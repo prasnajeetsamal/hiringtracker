@@ -10,6 +10,7 @@ import Button from '../components/common/Button.jsx';
 import Spinner from '../components/common/Spinner.jsx';
 import EmptyState from '../components/common/EmptyState.jsx';
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx';
+import FilterBar, { FilterSearch, FilterSelect } from '../components/common/FilterBar.jsx';
 import StageBadge from '../components/candidates/StageBadge.jsx';
 import RecommendationBadge from '../components/candidates/RecommendationBadge.jsx';
 import CandidateImportDialog from '../components/candidates/CandidateImportDialog.jsx';
@@ -144,51 +145,61 @@ export default function CandidatesPage() {
         }
       />
 
-      <Card className="mb-4" padding={false}>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 p-3">
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search name, email…"
-            className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 lg:col-span-1"
-          />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-          <select
-            value={stageFilter}
-            onChange={(e) => setStageFilter(e.target.value)}
-            className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="">All stages</option>
-            {STAGES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-          </select>
-          <select
-            value={projectFilter}
-            onChange={(e) => setProjectFilter(e.target.value)}
-            className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="">All projects</option>
-            {(projects || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-          <select
-            value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
-            className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="">All roles{projectFilter ? ' (in selected project)' : ''}</option>
-            {rolesForProject.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.title}{!projectFilter && r.project?.name ? ` — ${r.project.name}` : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-      </Card>
+      <FilterBar
+        activeCount={
+          (search ? 1 : 0) +
+          (statusFilter !== 'active' ? 1 : 0) +
+          (stageFilter ? 1 : 0) +
+          (projectFilter ? 1 : 0) +
+          (roleFilter ? 1 : 0)
+        }
+        onClearAll={() => {
+          setSearch('');
+          setStatusFilter('active');
+          setStageFilter('');
+          setProjectFilter('');
+          setRoleFilter('');
+        }}
+      >
+        <FilterSearch value={search} onChange={setSearch} placeholder="Search name, email…" />
+        <FilterSelect
+          label="Status"
+          value={statusFilter}
+          onChange={setStatusFilter}
+          defaultValue="active"
+          options={STATUS_OPTIONS}
+        />
+        <FilterSelect
+          label="Stage"
+          value={stageFilter}
+          onChange={setStageFilter}
+          options={[
+            { value: '', label: 'All stages' },
+            ...STAGES.map((s) => ({ value: s.key, label: s.label })),
+          ]}
+        />
+        <FilterSelect
+          label="Project"
+          value={projectFilter}
+          onChange={setProjectFilter}
+          options={[
+            { value: '', label: 'All projects' },
+            ...(projects || []).map((p) => ({ value: p.id, label: p.name })),
+          ]}
+        />
+        <FilterSelect
+          label="Role"
+          value={roleFilter}
+          onChange={setRoleFilter}
+          options={[
+            { value: '', label: projectFilter ? 'All roles in project' : 'All roles' },
+            ...rolesForProject.map((r) => ({
+              value: r.id,
+              label: r.title + (!projectFilter && r.project?.name ? ` — ${r.project.name}` : ''),
+            })),
+          ]}
+        />
+      </FilterBar>
 
       {isLoading ? (
         <Spinner />

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageSquare, X, Send, Loader2, Sparkles, Trash2 } from 'lucide-react';
+import { MessageSquare, X, Send, Loader2, Sparkles, Trash2, Plus } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { askAssistant } from '../../lib/api.js';
 
 const STORAGE_KEY = 'slate.chat.messages';
@@ -235,8 +236,12 @@ export default function ChatWidget() {
   };
 
   const clearHistory = () => {
+    if (messages.length === 0) return;
+    if (!window.confirm('Clear this conversation? This cannot be undone.')) return;
     setMessages([]);
     setError('');
+    try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+    toast.success('Conversation cleared');
   };
 
   return (
@@ -265,10 +270,10 @@ export default function ChatWidget() {
             {messages.length > 0 && (
               <button
                 onClick={clearHistory}
-                className="text-slate-500 hover:text-slate-200 p-1 rounded-md hover:bg-slate-800/60"
-                title="Clear conversation"
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-rose-300 hover:text-rose-200 hover:bg-rose-500/10 border border-rose-500/30 transition"
+                title="Delete this conversation"
               >
-                <Trash2 size={14} />
+                <Trash2 size={11} /> Clear
               </button>
             )}
             <button
