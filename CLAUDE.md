@@ -10,6 +10,11 @@ A focused hiring tracker. Sibling to ResumeScreener at `../resumescreener`. **Re
 - **Multi-role candidate consideration** — clone candidate to another role, sibling-list on detail page. Shipped.
 - **In-app AI assistant** — Claude with tool-use over the user's RLS-scoped data, floating bottom-right on every page. Shipped.
 - **Admin-only deletes** — single consolidated endpoint for candidate / role / project hard-delete with cascading cleanup of comments + storage. Shipped.
+- **Bulk resume screening** — multi-file upload + auto-score against the JD (parallel client-side fan-out, concurrency=3). Shipped.
+- **Reports page** — hiring performance summary, scoped by project/role, with CSV export, print/PDF, and shareable URL. Shipped.
+- **Resume formatter** — `ResumeView` component renders the candidate's parsed resume with detected headings / bullets / contact-info chips / role lines. Shipped.
+- **Sidebar UX** — UserMenu docked at sidebar bottom (popover opens up); items grouped into "Hiring" and "Tools" sections. Shipped.
+- **Filter UX** — custom dark-themed popover (no native `<select>`), pill triggers showing the selected value inline with one-click clear ✕, autosearch when an option list exceeds 8. Shipped.
 
 Live at https://trackerhiring.vercel.app. Repo at https://github.com/prasnajeetsamal/hiringtracker.
 
@@ -81,13 +86,16 @@ Every handler **must** `await requireAuth(req, res)` first (cron handler verifie
 | `/projects` | ProjectsPage | Card grid with role + active-candidate counts. |
 | `/projects/:projectId` | ProjectDetailPage | Roles grid (with status pill + active-candidate count). Admin gets Delete project button. |
 | `/projects/:projectId/roles/:roleId` | RoleDetailPage | Tiptap JD editor, JD upload (rich HTML), JD template picker, stage customizer, embedded pipeline kanban. **Add candidate is NOT here** — it lives on `/candidates`. |
-| `/candidates` | CandidatesPage | Filtered table (search / status / stage / project / role). **Add candidate** dialog with searchable role picker. CSV export, admin-only delete per row. |
-| `/candidates/:candidateId` | CandidateDetailPage | AI evaluation, pipeline timeline with per-stage interviewer assignment + feedback form, all-feedback timeline + AI committee brief, comments, sibling-candidate list ("Also considered as"), Consider-for-another-role action, admin-only delete. |
+| `/candidates` | CandidatesPage | Filtered table (search / status / stage / project / role). **Add candidate** dialog supports MULTI-FILE upload + auto-score-against-JD (concurrency=3, per-row progress). CSV export, admin-only delete per row. |
+| `/candidates/:candidateId` | CandidateDetailPage | AI evaluation, pipeline timeline with per-stage interviewer assignment + feedback form, all-feedback timeline + AI committee brief, comments, sibling-candidate list ("Also considered as"), Consider-for-another-role action, admin-only delete. **Resume rendered via `ResumeView`** (heuristic formatting), not raw `<pre>`. |
 | `/calendar` | CalendarPage | Two tabs: "My availability" (drag-to-create slots) + "Team availability" (everyone's slots, color-coded with chip-legend filter). |
 | `/my-interviews` | MyInterviewsPage | Two tabs: "Mine" (assignments + pending feedback) + "All" (org-wide assignments table). |
+| `/reports` | ReportsPage | Hiring performance summary scoped by project/role. KPIs, pipeline stage breakdown (active/passed/rejected/skipped per stage with reach + pass-through %), AI score histogram, time-to-hire/reject medians, source breakdown, top scorers. **Filters baked into URL** so the link is shareable. Actions: Share link (copies URL), Print/PDF (uses `@media print` stylesheet), Export CSV. |
 | `/jd-templates` | JDTemplatesPage | System + personal templates. |
 | `/people` | PeoplePage | Admin/manager-only via Sidebar. Lists all profiles, invite-by-email dialog, admin can change others' roles inline. |
 | `/settings` | SettingsPage | Self-edit profile (name, role for self in v1, timezone). |
+
+Sidebar items are grouped into two sections — **HIRING** (Dashboard, Hiring Projects, Candidates, Reports) and **TOOLS** (Calendar, Interviews, JD Templates, +People for admin/manager/hiring_team). UserMenu lives at the **bottom of the sidebar** as an expanded row (popover opens upwards). On mobile the sidebar is hidden, so a thin `md:hidden` header carries UserMenu.
 
 ## Shared UI primitives (`src/components/common/`)
 
@@ -98,9 +106,17 @@ Every handler **must** `await requireAuth(req, res)` first (cron handler verifie
 - `EmptyState` — icon + title + description + optional action.
 - `Spinner` — small inline loading.
 - `Skeleton` / `SkeletonRows` / `SkeletonGrid` — shimmer loaders (use these instead of Spinner for grid/list pages).
-- `FileDrop` — drag-or-click file picker.
+- `FileDrop` — drag-or-click file picker. Pass `multiple` for the bulk-upload mode (CandidateImportDialog uses this for resume screening).
 - `PageHeader` — breadcrumb + title + subtitle + actions.
-- **`FilterBar` + `FilterSearch` + `FilterSelect`** — consistent filter row across pages. `FilterSelect` highlights when active (vs. its `defaultValue` or first option). `FilterBar` shows an "active count" + Clear-all pill.
+- **`FilterBar` + `FilterSearch` + `FilterSelect`** — consistent filter row. `FilterSelect` is a **fully custom dark-themed dropdown** (no native `<select>`); pill trigger shows the selected value inline with a one-click ✕ to clear; auto-search inside the popover when options > 8. `FilterBar` shows an "active count" + Clear-all pill. Pass `icon` to FilterSelect for a leading icon.
+
+## Page-specific components
+
+- `src/components/candidates/ResumeView.jsx` — heuristic formatter for resume_text. Detects name line, contact info (email/phone/LinkedIn/URL → clickable chips), ALL-CAPS section headings, bullet items (`-`, `*`, `•`, `‣`, `◦`, `▪`, `■`, etc.), and "Company — Title  Date" role lines. Falls back to paragraph rendering with line breaks preserved.
+- `src/components/candidates/CandidateImportDialog.jsx` — three-tab dialog (Upload / LinkedIn / Manual). Upload tab supports **multi-file** with an auto-screen-against-JD checkbox (default on). Per-row live status: Uploading → Queued → Scoring with Claude → Scored XX/100. Concurrency capped at 3. Refreshes candidate queries before AND after scoring.
+- `src/components/dashboard/HeroCard.jsx` / `PipelineFunnel.jsx` / `Sparkline.jsx` / `ScoreGauge.jsx` — dashboard-only widgets.
+- `src/components/reports/StageBreakdown.jsx` — gradient stage bars with active / passed / rejected / skipped slices.
+- `src/components/reports/ScoreHistogram.jsx` — 10-bucket AI score distribution (rose → amber → emerald gradient).
 
 ## Pipeline state machine
 
@@ -150,6 +166,8 @@ Roles: `admin`, `hiring_manager`, `hiring_team`, `interviewer`. The 0004 trigger
 - JD content (Tiptap output / read-only HTML) uses the `.jd-content` (editor) and `.jd-prose` (read-only) classes from `src/index.css` — don't add `@tailwindcss/typography`.
 - React-big-calendar dark-theme overrides also live in `src/index.css`. Don't import the calendar's default light CSS in any other place than `AvailabilityCalendar.jsx`.
 - Loading states: prefer `Skeleton` over `Spinner` for grid/list pages.
+- Print styles in `src/index.css` (`@media print`) hide chrome (sidebar, FAB, action buttons) and flatten cards to white — used by the Reports page's "Print / PDF" action. New chrome-y elements should add a print-hiding rule when relevant.
+- For new filter rows: use `<FilterBar>` with `<FilterSearch>` + `<FilterSelect>` rather than rolling your own selects; consistent visual + dark-themed dropdown.
 
 ## Chatbot details (`api/ask.js` + `ChatWidget`)
 
