@@ -75,6 +75,50 @@ select, input, textarea, button {
   100% { transform: translateX(100%); }
 }
 
+/* Print styles — used by Reports page "Print / PDF" action.
+   Hides chrome (sidebar / FAB / actions / filter bar) and renders content
+   on a white page so the export looks like a real report. */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  aside, header, .rbc-toolbar, [class*="ChatWidget"] {
+    display: none !important;
+  }
+  /* The chat FAB is a fixed button — hide everything fixed */
+  body > div > button.fixed,
+  body > div > div.fixed {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+  /* Cards / surfaces — flatten to white */
+  .rounded-2xl, .rounded-xl, .rounded-lg {
+    background: white !important;
+    border-color: #cbd5e1 !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+  }
+  /* Force readable text */
+  *, *::before, *::after {
+    color: #0f172a !important;
+    background-image: none !important;
+    text-shadow: none !important;
+  }
+  .text-gradient {
+    background: none !important;
+    -webkit-background-clip: initial !important;
+            background-clip: initial !important;
+    color: #4338ca !important;
+  }
+  /* Hide buttons / interactive controls */
+  button, .no-print {
+    display: none !important;
+  }
+}
+
 /* JD content (Tiptap output) — rendered both in the editor and read-only views */
 .jd-content h2, .jd-prose h2 {
   font-size: 1.05rem;

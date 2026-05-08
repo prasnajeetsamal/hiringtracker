@@ -12,6 +12,7 @@ import {
   ClipboardList,
   Sparkles,
   UserCog,
+  FileBarChart,
 } from 'lucide-react';
 
 import { supabase } from '../../lib/supabase.js';
@@ -24,6 +25,7 @@ const baseItems = [
   { to: '/candidates', label: 'Candidates', icon: Users },
   { to: '/calendar', label: 'Calendar', icon: CalendarDays },
   { to: '/my-interviews', label: 'Interviews', icon: ClipboardCheck },
+  { to: '/reports', label: 'Reports', icon: FileBarChart },
   { to: '/jd-templates', label: 'JD Templates', icon: FileText },
 ];
 
