@@ -23,7 +23,8 @@ export default function AppShell() {
     <div className="min-h-screen flex text-slate-200">
       <Sidebar />
       <div className="flex-1 min-w-0 flex flex-col">
-        <header className="h-14 border-b border-slate-800/80 bg-slate-950/40 backdrop-blur flex items-center justify-end px-4 sticky top-0 z-30">
+        {/* Mobile-only header — desktop has UserMenu in the sidebar footer */}
+        <header className="md:hidden h-14 border-b border-slate-800/80 bg-slate-950/40 backdrop-blur flex items-center justify-end px-4 sticky top-0 z-30">
           <UserMenu />
         </header>
         <main className="flex-1 min-w-0 p-6">

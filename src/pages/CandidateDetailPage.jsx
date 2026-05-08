@@ -16,6 +16,7 @@ import StageBadge from '../components/candidates/StageBadge.jsx';
 import RecommendationBadge from '../components/candidates/RecommendationBadge.jsx';
 import InterviewerAssignment from '../components/candidates/InterviewerAssignment.jsx';
 import ConsiderForRoleDialog from '../components/candidates/ConsiderForRoleDialog.jsx';
+import ResumeView from '../components/candidates/ResumeView.jsx';
 import FeedbackForm from '../components/feedback/FeedbackForm.jsx';
 import FeedbackTimeline from '../components/feedback/FeedbackTimeline.jsx';
 import CommentThread from '../components/comments/CommentThread.jsx';
@@ -455,13 +456,11 @@ export default function CandidateDetailPage() {
             <Card>
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2 text-slate-200">
-                  <FileText size={16} className="text-indigo-300" /><span className="font-medium">Resume text</span>
+                  <FileText size={16} className="text-indigo-300" /><span className="font-medium">Resume</span>
                 </div>
                 <span className="text-[11px] text-slate-500">parsed</span>
               </div>
-              <pre className="text-xs text-slate-300 whitespace-pre-wrap font-sans max-h-[480px] overflow-y-auto leading-relaxed">
-                {candidate.resume_text}
-              </pre>
+              <ResumeView text={candidate.resume_text} />
             </Card>
           )}
         </div>

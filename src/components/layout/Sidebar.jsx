@@ -16,6 +16,7 @@ import {
 
 import { supabase } from '../../lib/supabase.js';
 import { useAuth } from '../../lib/AuthContext.jsx';
+import UserMenu from './UserMenu.jsx';
 
 const baseItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -84,8 +85,9 @@ export default function Sidebar() {
           </NavLink>
         ))}
       </nav>
-      <div className="px-5 py-3 border-t border-slate-800/60 text-[11px] text-slate-500">
-        v1.0
+      <div className="px-3 py-3 border-t border-slate-800/60 space-y-2">
+        <UserMenu variant="expanded" />
+        <div className="text-[10px] text-slate-600 text-center">Slate v1.0</div>
       </div>
     </aside>
   );
