@@ -19,14 +19,28 @@ import { supabase } from '../../lib/supabase.js';
 import { useAuth } from '../../lib/AuthContext.jsx';
 import UserMenu from './UserMenu.jsx';
 
-const baseItems = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/projects', label: 'Hiring Projects', icon: FolderKanban },
-  { to: '/candidates', label: 'Candidates', icon: Users },
-  { to: '/calendar', label: 'Calendar', icon: CalendarDays },
-  { to: '/my-interviews', label: 'Interviews', icon: ClipboardCheck },
-  { to: '/reports', label: 'Reports', icon: FileBarChart },
-  { to: '/jd-templates', label: 'JD Templates', icon: FileText },
+// Sidebar pages grouped into two sections.
+//   - "Hiring" — the pipeline-oriented day-to-day work
+//   - "Tools" — supporting features (your calendar, your interviews, library)
+// People is appended to "Tools" only for admins / managers / hiring team.
+const SECTIONS = [
+  {
+    label: 'Hiring',
+    items: [
+      { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+      { to: '/projects', label: 'Hiring Projects', icon: FolderKanban },
+      { to: '/candidates', label: 'Candidates', icon: Users },
+      { to: '/reports', label: 'Reports', icon: FileBarChart },
+    ],
+  },
+  {
+    label: 'Tools',
+    items: [
+      { to: '/calendar', label: 'Calendar', icon: CalendarDays },
+      { to: '/my-interviews', label: 'Interviews', icon: ClipboardCheck },
+      { to: '/jd-templates', label: 'JD Templates', icon: FileText },
+    ],
+  },
 ];
 
 export default function Sidebar() {
@@ -44,10 +58,16 @@ export default function Sidebar() {
   });
   const showPeople = profile?.role && ['admin', 'hiring_manager', 'hiring_team'].includes(profile.role);
 
-  const items = [
-    ...baseItems,
-    ...(showPeople ? [{ to: '/people', label: 'People', icon: UserCog }] : []),
-  ];
+  // Build the live sections array, appending People to Tools when allowed.
+  const sections = SECTIONS.map((section) => {
+    if (section.label === 'Tools' && showPeople) {
+      return {
+        ...section,
+        items: [...section.items, { to: '/people', label: 'People', icon: UserCog }],
+      };
+    }
+    return section;
+  });
 
   return (
     <aside className="hidden md:flex md:flex-col w-60 shrink-0 border-r border-slate-800/80 bg-slate-950/60 backdrop-blur">
@@ -67,24 +87,33 @@ export default function Sidebar() {
           </div>
         </div>
       </div>
-      <nav className="flex-1 px-3 py-4 space-y-0.5">
-        {items.map(({ to, label, icon: Icon, end }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            className={({ isActive }) =>
-              [
-                'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition',
-                isActive
-                  ? 'bg-slate-800/80 text-slate-100 border border-slate-700/80'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40 border border-transparent',
-              ].join(' ')
-            }
-          >
-            <Icon size={16} />
-            <span>{label}</span>
-          </NavLink>
+      <nav className="flex-1 px-3 py-4 overflow-y-auto">
+        {sections.map((section, sIdx) => (
+          <div key={section.label} className={sIdx === 0 ? '' : 'mt-5'}>
+            <div className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              {section.label}
+            </div>
+            <div className="space-y-0.5">
+              {section.items.map(({ to, label, icon: Icon, end }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={end}
+                  className={({ isActive }) =>
+                    [
+                      'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition',
+                      isActive
+                        ? 'bg-slate-800/80 text-slate-100 border border-slate-700/80'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40 border border-transparent',
+                    ].join(' ')
+                  }
+                >
+                  <Icon size={16} />
+                  <span>{label}</span>
+                </NavLink>
+              ))}
+            </div>
+          </div>
         ))}
       </nav>
       <div className="px-3 py-3 border-t border-slate-800/60 space-y-2">
