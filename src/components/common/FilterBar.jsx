@@ -34,25 +34,33 @@ export default function FilterBar({ children, activeCount = 0, onClearAll, class
   );
 }
 
-/** Free-text search input with a leading icon. */
+/** Free-text search input with a leading icon. Pill-shaped to match FilterSelect. */
 export function FilterSearch({ value, onChange, placeholder = 'Search…', className }) {
   return (
     <div className={clsx('relative flex-1 min-w-[180px] max-w-sm', className)}>
-      <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+      <Search
+        size={13}
+        className={clsx(
+          'absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none',
+          value ? 'text-indigo-300' : 'text-slate-500'
+        )}
+      />
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         className={clsx(
-          'w-full pl-9 pr-7 py-2 rounded-lg text-sm text-slate-100 placeholder:text-slate-500',
-          'bg-slate-950/60 border focus:outline-none focus:ring-2 focus:ring-indigo-500',
-          value ? 'border-indigo-500/40' : 'border-slate-700'
+          'w-full pl-8 pr-7 py-1.5 rounded-full text-sm text-slate-100 placeholder:text-slate-500',
+          'border focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/60 transition',
+          value
+            ? 'border-indigo-500/60 bg-indigo-500/15 ring-1 ring-indigo-500/30'
+            : 'border-slate-700 bg-slate-900/50 hover:border-slate-600'
         )}
       />
       {value && (
         <button
           onClick={() => onChange('')}
-          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-200 p-0.5"
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-indigo-300 hover:text-indigo-100 p-0.5"
           title="Clear search"
         >
           <X size={11} />
@@ -69,33 +77,54 @@ export function FilterSearch({ value, onChange, placeholder = 'Search…', class
  * unspecified, the first option's value — the "no filter" sentinel).
  * Pass `defaultValue` when the page boots with a non-empty default
  * (e.g. status="active") that you don't want to look "filtered".
+ *
+ * Optional `icon` (a lucide-react component) renders to the left of
+ * the label.
  */
-export function FilterSelect({ label, value, onChange, options, defaultValue, className, disabled }) {
+export function FilterSelect({ label, value, onChange, options, defaultValue, icon: Icon, className, disabled }) {
   const sentinel = defaultValue !== undefined ? defaultValue : (options[0]?.value);
   const isActive = value !== sentinel;
+  // Show the selected option's text as a small "value" tag when active,
+  // so users can see the current narrowing at a glance.
+  const selected = options.find((o) => String(o.value) === String(value));
+  const valueLabel = isActive && selected ? selected.label : null;
+
   return (
     <div
       className={clsx(
-        'group relative inline-flex items-center rounded-lg border transition cursor-pointer',
+        'group relative inline-flex items-center rounded-full border transition',
         disabled
-          ? 'border-slate-800 bg-slate-950/30 opacity-60 cursor-not-allowed'
+          ? 'border-slate-800 bg-slate-950/30 opacity-60'
           : isActive
-          ? 'border-indigo-500/50 bg-indigo-500/10 hover:bg-indigo-500/15'
-          : 'border-slate-700 bg-slate-950/60 hover:border-slate-600',
+          ? 'border-indigo-500/60 bg-indigo-500/15 hover:bg-indigo-500/20 ring-1 ring-indigo-500/30'
+          : 'border-slate-700 bg-slate-900/50 hover:border-slate-600 hover:bg-slate-900/80',
         className
       )}
     >
+      {Icon && (
+        <Icon
+          size={12}
+          className={clsx('ml-3 shrink-0', isActive ? 'text-indigo-300' : 'text-slate-500')}
+        />
+      )}
       <span className={clsx(
-        'pl-3 pr-1.5 text-[11px] uppercase tracking-wide whitespace-nowrap',
-        isActive ? 'text-indigo-300 font-medium' : 'text-slate-500'
+        'pl-2 pr-1 text-[11px] font-medium whitespace-nowrap',
+        isActive ? 'text-indigo-200' : 'text-slate-400'
       )}>
         {label}
+        {valueLabel && (
+          <>
+            <span className={isActive ? 'text-indigo-300/60 mx-1' : 'text-slate-600 mx-1'}>·</span>
+            <span className={isActive ? 'text-slate-100' : 'text-slate-300'}>{valueLabel}</span>
+          </>
+        )}
       </span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        className="appearance-none bg-transparent pr-7 py-1.5 text-sm text-slate-100 focus:outline-none cursor-pointer disabled:cursor-not-allowed"
+        className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
+        aria-label={label}
       >
         {options.map((o) => (
           <option key={String(o.value)} value={o.value}>{o.label}</option>
@@ -103,7 +132,7 @@ export function FilterSelect({ label, value, onChange, options, defaultValue, cl
       </select>
       <ChevronDown
         size={12}
-        className={clsx('absolute right-2 pointer-events-none', isActive ? 'text-indigo-300' : 'text-slate-500')}
+        className={clsx('mr-2.5 ml-1 pointer-events-none', isActive ? 'text-indigo-300' : 'text-slate-500')}
       />
     </div>
   );

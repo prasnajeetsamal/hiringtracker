@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Users, Download, Star, ArrowRight, Trash2, Plus } from 'lucide-react';
+import { Users, Download, Star, ArrowRight, Trash2, Plus, Activity, Layers, FolderKanban, Briefcase } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import PageHeader from '../components/common/PageHeader.jsx';
@@ -164,6 +164,7 @@ export default function CandidatesPage() {
         <FilterSearch value={search} onChange={setSearch} placeholder="Search name, email…" />
         <FilterSelect
           label="Status"
+          icon={Activity}
           value={statusFilter}
           onChange={setStatusFilter}
           defaultValue="active"
@@ -171,6 +172,7 @@ export default function CandidatesPage() {
         />
         <FilterSelect
           label="Stage"
+          icon={Layers}
           value={stageFilter}
           onChange={setStageFilter}
           options={[
@@ -180,6 +182,7 @@ export default function CandidatesPage() {
         />
         <FilterSelect
           label="Project"
+          icon={FolderKanban}
           value={projectFilter}
           onChange={setProjectFilter}
           options={[
@@ -189,6 +192,7 @@ export default function CandidatesPage() {
         />
         <FilterSelect
           label="Role"
+          icon={Briefcase}
           value={roleFilter}
           onChange={setRoleFilter}
           options={[

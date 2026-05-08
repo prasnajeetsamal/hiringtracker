@@ -395,6 +395,7 @@ export default function DashboardPage() {
       >
         <FilterSelect
           label="Project"
+          icon={FolderKanban}
           value={projectFilter}
           onChange={setProjectFilter}
           options={[
@@ -404,6 +405,7 @@ export default function DashboardPage() {
         />
         <FilterSelect
           label="Role"
+          icon={Briefcase}
           value={roleFilter}
           onChange={setRoleFilter}
           options={[
