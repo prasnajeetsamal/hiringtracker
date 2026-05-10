@@ -2,6 +2,8 @@
 
 A focused hiring tracker. Sibling to ResumeScreener at `../resumescreener`. **Reuse, don't reinvent.**
 
+> **Product context (load-bearing):** Slate is being built as the user's company's intended **replacement for Workday + manual hiring processes**. The user plans to pitch it internally and have the hiring team adopt it. Treat features as **production-grade**, not experiments — edge cases, polish, and reliability matter. Avoid changes that compromise reliability.
+
 ## Status snapshot
 
 - **v0.1** — auth, projects, roles, JD textarea, app shell. Shipped.
@@ -13,8 +15,14 @@ A focused hiring tracker. Sibling to ResumeScreener at `../resumescreener`. **Re
 - **Bulk resume screening** — multi-file upload + auto-score against the JD (parallel client-side fan-out, concurrency=3). Shipped.
 - **Reports page** — hiring performance summary, scoped by project/role, with CSV export, print/PDF, and shareable URL. Shipped.
 - **Resume formatter** — `ResumeView` component renders the candidate's parsed resume with detected headings / bullets / contact-info chips / role lines. Shipped.
-- **Sidebar UX** — UserMenu docked at sidebar bottom (popover opens up); items grouped into "Hiring" and "Tools" sections. Shipped.
+- **Sidebar UX** — UserMenu docked at sidebar bottom (popover opens up); items grouped into "Hiring" and "Tools" sections; **pending-feedback badge** on the Interviews item. Shipped.
 - **Filter UX** — custom dark-themed popover (no native `<select>`), pill triggers showing the selected value inline with one-click clear ✕, autosearch when an option list exceeds 8. Shipped.
+- **9-stage pipeline** — added `joined_fractal` and `rejected_offer` after `offer`. Schema-backed by migration `0007`. Shipped.
+- **Role location** — `work_mode` (remote/office/hybrid) + `city` / `state` / `country` columns. Legacy `location` text retained as fallback. Shipped.
+- **Side-panel projects UX** — `/projects` is a full-width project grid; clicking a card opens a sticky right-side panel with that project's roles. Project list stays visible — click another card to swap, X (or Esc) to close. Shipped.
+- **JD templates CRUD** — anyone can create/edit personal templates; system templates remain admin-only. Shipped.
+- **Tags on candidates** — UI for adding/filtering/displaying. Schema's `tags text[]` exposed via `TagsEditor` primitive. Shipped.
+- **Archive flows** — projects archive to `status='archived'`, roles to `status='closed'`. UI toggles visibility; both can be restored. Shipped.
 
 Live at https://trackerhiring.vercel.app. Repo at https://github.com/prasnajeetsamal/hiringtracker.
 
@@ -42,6 +50,8 @@ Live at https://trackerhiring.vercel.app. Repo at https://github.com/prasnajeets
 | `0004_v05_v10.sql` | **Tightens RLS** to project-membership-based, adds helper functions (`is_admin`, `is_project_member`, `is_project_manager`), project-owner-as-manager trigger (with backfill), candidate→pipeline-rows trigger, audit-log triggers. |
 | `0005_admin_people.sql` | Lets admin / project managers update other profiles' role + name (RLS belt-and-suspenders for direct browser writes; server endpoints also gate). Indexes on `availability_slots(starts_at)` for the team-calendar range query. |
 | `0006_fix_rls_recursion.sql` | **Fixes infinite recursion** between candidates and candidate_pipeline policies. Wraps cross-table EXISTS checks in `security definer` functions (`user_assigned_to_candidate`, `user_member_of_candidates_project`, `user_member_of_pipelines_project`, `user_assigned_to_pipeline`, `user_can_see_candidate_via_project`, `user_can_see_role_via_project`). All cross-table policies now use these helpers. |
+| `0007_extend_pipeline_and_location.sql` | **Adds 2 new pipeline stages** (`joined_fractal`, `rejected_offer`) after `offer`. Updates `create_pipeline_for_candidate` trigger; backfills existing candidates with the new stage rows in `pending`. **Adds structured location columns** to `roles`: `work_mode` (remote/office/hybrid), `city`, `state`, `country`. Best-effort backfill of `city` from legacy `location`; legacy column retained for back-compat. |
+| `0008_jd_templates_and_misc.sql` | Splits the admin-only JD-template write policy: any authenticated user can now create/edit/delete **personal** (`is_system=false`) templates; system templates remain admin-only. Adds GIN index on `candidates.tags`. |
 
 When adding a migration: **always include RLS for any new table in the same migration**. Backfill existing data if you're tightening policies. **Never reference another table directly inside an RLS policy if that other table's policy references back** — wrap in a `security definer` function instead.
 
@@ -83,19 +93,21 @@ Every handler **must** `await requireAuth(req, res)` first (cron handler verifie
 | Path | Component | Notes |
 |---|---|---|
 | `/` | DashboardPage | Hero + KPIs + visual funnel + top scores + activity. **Has Project + Role filters** that scope every widget. Empty-state shows seed-SQL CTA for admins. |
-| `/projects` | ProjectsPage | Card grid with role + active-candidate counts. |
-| `/projects/:projectId` | ProjectDetailPage | Roles grid (with status pill + active-candidate count). Admin gets Delete project button. |
-| `/projects/:projectId/roles/:roleId` | RoleDetailPage | Tiptap JD editor, JD upload (rich HTML), JD template picker, stage customizer, embedded pipeline kanban. **Add candidate is NOT here** — it lives on `/candidates`. |
-| `/candidates` | CandidatesPage | Filtered table (search / status / stage / project / role). **Add candidate** dialog supports MULTI-FILE upload + auto-score-against-JD (concurrency=3, per-row progress). CSV export, admin-only delete per row. |
-| `/candidates/:candidateId` | CandidateDetailPage | AI evaluation, pipeline timeline with per-stage interviewer assignment + feedback form, all-feedback timeline + AI committee brief, comments, sibling-candidate list ("Also considered as"), Consider-for-another-role action, admin-only delete. **Resume rendered via `ResumeView`** (heuristic formatting), not raw `<pre>`. |
+| `/projects` | ProjectsPage | **Full-width responsive grid** of project cards (auto-fill, 280px min). Cards show status pill + role count + active-candidate count. "Show archived" toggle in header. **No detail panel by default.** |
+| `/projects/:projectId` | ProjectsPage | Same component — grid stays visible (squeezes to 220px-min cards on the left half), and a **sticky right-side panel** opens showing the selected project's roles + actions (New role / Archive-Restore / Delete). Click another card to swap; **X or Escape** closes back to `/projects`. The panel is a `Card padding={false}` with sticky-top header inside its own scroll context. |
+| `/projects/:projectId/roles/:roleId` | RoleDetailPage | Tiptap JD editor, JD upload (rich HTML), JD template picker, stage customizer, embedded pipeline kanban. **Uses `LocationFields`** (work_mode + city/state/country). Archive / Reopen action via `roles.status='closed'`. **Add candidate is NOT here** — it lives on `/candidates`. |
+| `/candidates` | CandidatesPage | Filtered table (search / status / stage / project / role / **tag**). **Add candidate** dialog supports MULTI-FILE upload + auto-score-against-JD (concurrency=3, per-row progress). CSV export, admin-only delete per row. |
+| `/candidates/:candidateId` | CandidateDetailPage | **Pending-feedback banner** at the top when the viewer is assigned to the candidate's current stage with no feedback. **Collapsible AI evaluation** card — collapsed by default once scored, with a one-line summary header (score + recommendation + chevron). Pipeline timeline with **per-stage Skip / Reject / Advance quick-actions inline on the active stage**, per-stage interviewer assignment + feedback form, all-feedback timeline + AI committee brief, comments, sibling-candidate list ("Also considered as"), Consider-for-another-role action, **Tags card** in sidebar, admin-only delete. **Resume rendered via `ResumeView`** (heuristic formatting), not raw `<pre>`. |
 | `/calendar` | CalendarPage | Two tabs: "My availability" (drag-to-create slots) + "Team availability" (everyone's slots, color-coded with chip-legend filter). |
 | `/my-interviews` | MyInterviewsPage | Two tabs: "Mine" (assignments + pending feedback) + "All" (org-wide assignments table). |
 | `/reports` | ReportsPage | Hiring performance summary scoped by project/role. KPIs, pipeline stage breakdown (active/passed/rejected/skipped per stage with reach + pass-through %), AI score histogram, time-to-hire/reject medians, source breakdown, top scorers. **Filters baked into URL** so the link is shareable. Actions: Share link (copies URL), Print/PDF (uses `@media print` stylesheet), Export CSV. |
-| `/jd-templates` | JDTemplatesPage | System + personal templates. |
+| `/jd-templates` | JDTemplatesPage | Full CRUD. **+ New template** button opens a modal with the Tiptap editor + name/category. Click any card to preview. Edit/Delete on each card. System templates can only be created/edited by admins (RLS in `0008`); personal templates by anyone. |
 | `/people` | PeoplePage | Admin/manager-only via Sidebar. Lists all profiles, invite-by-email dialog, admin can change others' roles inline. |
 | `/settings` | SettingsPage | Self-edit profile (name, role for self in v1, timezone). |
 
-Sidebar items are grouped into two sections — **HIRING** (Dashboard, Hiring Projects, Candidates, Reports) and **TOOLS** (Calendar, Interviews, JD Templates, +People for admin/manager/hiring_team). UserMenu lives at the **bottom of the sidebar** as an expanded row (popover opens upwards). On mobile the sidebar is hidden, so a thin `md:hidden` header carries UserMenu.
+Sidebar items are grouped into two sections — **HIRING** (Dashboard, Hiring Projects, Candidates, Reports) and **TOOLS** (Calendar, Interviews, JD Templates, +People for admin/manager/hiring_team). UserMenu lives at the **bottom of the sidebar** as an expanded row (popover opens upwards). On mobile the sidebar is hidden, so a thin `md:hidden` header carries UserMenu. The Interviews item shows a **rose-toned count badge** when the user has pending feedback (poll every 60s).
+
+**Important routing note:** `/projects` and `/projects/:projectId` render the **same `ProjectsPage` component**; layout switches based on `useParams().projectId` (no projectId = full grid, projectId = grid + side panel). The old standalone `ProjectDetailPage.jsx` was removed.
 
 ## Shared UI primitives (`src/components/common/`)
 
@@ -109,25 +121,29 @@ Sidebar items are grouped into two sections — **HIRING** (Dashboard, Hiring Pr
 - `FileDrop` — drag-or-click file picker. Pass `multiple` for the bulk-upload mode (CandidateImportDialog uses this for resume screening).
 - `PageHeader` — breadcrumb + title + subtitle + actions.
 - **`FilterBar` + `FilterSearch` + `FilterSelect`** — consistent filter row. `FilterSelect` is a **fully custom dark-themed dropdown** (no native `<select>`); pill trigger shows the selected value inline with a one-click ✕ to clear; auto-search inside the popover when options > 8. `FilterBar` shows an "active count" + Clear-all pill. Pass `icon` to FilterSelect for a leading icon.
+- **`LocationFields`** — work-mode toggle (Remote / Office / Hybrid) + city / state / country inputs. Used in role create + edit forms. Companion `formatLocation({work_mode, city, state, country, location})` helper renders the structured value as a single string anywhere a role's place is displayed; falls back to legacy `roles.location` text if the structured fields are empty.
 
 ## Page-specific components
 
 - `src/components/candidates/ResumeView.jsx` — heuristic formatter for resume_text. Detects name line, contact info (email/phone/LinkedIn/URL → clickable chips), ALL-CAPS section headings, bullet items (`-`, `*`, `•`, `‣`, `◦`, `▪`, `■`, etc.), and "Company — Title  Date" role lines. Falls back to paragraph rendering with line breaks preserved.
 - `src/components/candidates/CandidateImportDialog.jsx` — three-tab dialog (Upload / LinkedIn / Manual). Upload tab supports **multi-file** with an auto-screen-against-JD checkbox (default on). Per-row live status: Uploading → Queued → Scoring with Claude → Scored XX/100. Concurrency capped at 3. Refreshes candidate queries before AND after scoring.
+- `src/components/candidates/TagsEditor.jsx` — chip-style tag editor. Enter or comma commits a tag (kebab-cased), Backspace removes the last. Optional `suggestions` prop populates a "common tags" hint row.
 - `src/components/dashboard/HeroCard.jsx` / `PipelineFunnel.jsx` / `Sparkline.jsx` / `ScoreGauge.jsx` — dashboard-only widgets.
 - `src/components/reports/StageBreakdown.jsx` — gradient stage bars with active / passed / rejected / skipped slices.
 - `src/components/reports/ScoreHistogram.jsx` — 10-bucket AI score distribution (rose → amber → emerald gradient).
 
 ## Pipeline state machine
 
-`src/lib/pipeline.js` is the single source of truth. Default order:
+`src/lib/pipeline.js` is the single source of truth. **9 stages, default order:**
 
-`resume_submitted → hm_review → technical_written → technical_interview → problem_solving → case_study → offer`
+`resume_submitted → hm_review → technical_written → technical_interview → problem_solving → case_study → offer → joined_fractal → rejected_offer`
 
-- Per-role overrides: `roles.stage_config` as `[{stage_key, enabled, what_to_expect}]`.
+- `joined_fractal` and `rejected_offer` are post-offer outcome stages (added in migration `0007`). They live AFTER `offer` and represent the candidate's final disposition.
+- Per-role overrides: `roles.stage_config` as `[{stage_key, enabled, what_to_expect}]`. The customizer in `RoleDetailPage` lets a manager toggle stages off and edit "what to expect".
 - Per-candidate overrides: set `candidate_pipeline.state` directly to `skipped`.
-- Pipeline rows are auto-created by the `candidates_create_pipeline` trigger on candidate insert (one row per stage, respecting `stage_config`).
-- **Advance / reject / skip is client-side** — multiple updates done sequentially via the Supabase client. If atomicity becomes an issue, lift to an `api/transition-candidate.js` endpoint (counts toward the 12-function limit).
+- Pipeline rows are auto-created by the `candidates_create_pipeline` trigger on candidate insert (one row per stage, respecting `stage_config`). The trigger lives in `0007` (replaces the 7-stage version from `0004`).
+- **Advance / reject / skip is client-side** — multiple updates done sequentially via the Supabase client. The CandidateDetailPage timeline now exposes per-stage Skip / Reject / Advance quick-actions inline on the active stage. If atomicity becomes an issue, lift to an `api/transition-candidate.js` endpoint (counts toward the 12-function limit).
+- **Server-side STAGE_LABELS maps** in `api/cron-stale-candidates.js`, `api/summarize-feedback.js`, and `api/ask.js` mirror `STAGES` from `pipeline.js`. Whenever you add or rename a stage, update **all three** server-side maps as well as `pipeline.js`.
 
 ## Permissions
 
@@ -168,6 +184,23 @@ Roles: `admin`, `hiring_manager`, `hiring_team`, `interviewer`. The 0004 trigger
 - Loading states: prefer `Skeleton` over `Spinner` for grid/list pages.
 - Print styles in `src/index.css` (`@media print`) hide chrome (sidebar, FAB, action buttons) and flatten cards to white — used by the Reports page's "Print / PDF" action. New chrome-y elements should add a print-hiding rule when relevant.
 - For new filter rows: use `<FilterBar>` with `<FilterSearch>` + `<FilterSelect>` rather than rolling your own selects; consistent visual + dark-themed dropdown.
+
+## AI scoring details (`api/score-candidate.js`)
+
+This is the most important AI surface in the app — the user expects high accuracy because hiring decisions hinge on it. Things to know:
+
+- The endpoint sends Claude **structured JD HTML** converted to text-with-structure (preserves `## headings` and `- bullets`) rather than flat-stripped text. Claude reads the JD's hierarchy.
+- **Role context** (title, level, work_mode, location) is injected directly into the system prompt so seniority and location-fit are calibrated.
+- Claude is asked to **identify the 4–8 most important requirements from the JD itself** and classify each as `must` / `preferred` / `nice` — no manual rubric needed per role.
+- Larger thinking budget (`CLAUDE_THINKING_BUDGET=5000` default) — accuracy matters more than speed.
+- **Post-processing safety net** runs after Claude returns:
+  - 1 must missing → score capped at **70**; 2+ → capped at **50** + recommendation forced to **REJECT**.
+  - **Level-keyword-based experience floor** (`junior` / `mid` / `senior` / `principal`). Below the floor: −15. Way above the senior cap: −5.
+  - Location penalty of −5 when work_mode is office/hybrid and the candidate's resume location clearly doesn't match.
+- `ai_analysis.context` block records role metadata + detected expectations + must-misses count for audit / debugging.
+- For LinkedIn-only candidates (`resume_text` is null), the endpoint returns 400 — AI scoring is **resume-required by design** (locked decision).
+
+When changing the scoring logic, be mindful: the user's company will trust this. Don't loosen the safety net without a clear reason.
 
 ## Chatbot details (`api/ask.js` + `ChatWidget`)
 
