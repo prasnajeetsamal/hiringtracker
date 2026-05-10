@@ -21,6 +21,7 @@ import StageCustomizer from '../components/pipeline/StageCustomizer.jsx';
 import { supabase } from '../lib/supabase.js';
 import { uploadJD, deleteRole } from '../lib/api.js';
 import { useIsAdmin } from '../lib/useIsAdmin.js';
+import { fetchRoleById, updateRole } from '../lib/queryHelpers.js';
 
 export default function RoleDetailPage() {
   const { projectId, roleId } = useParams();
@@ -29,17 +30,9 @@ export default function RoleDetailPage() {
   const { isAdmin } = useIsAdmin();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
-  const { data: role, isLoading } = useQuery({
+  const { data: role, isLoading, error: roleError } = useQuery({
     queryKey: ['role', roleId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('roles')
-        .select('id, project_id, sr_number, title, level, status, jd_html, jd_source, stage_config, location, work_mode, city, state, country')
-        .eq('id', roleId)
-        .single();
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => fetchRoleById(supabase, roleId),
   });
 
   const [draft, setDraft] = useState({
@@ -68,26 +61,28 @@ export default function RoleDetailPage() {
 
   const save = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase
-        .from('roles')
-        .update({
-          jd_html: draft.jd_html,
-          jd_source: role?.jd_source === 'uploaded' ? 'inline' : (role?.jd_source || 'inline'),
-          sr_number: draft.sr_number || null,
-          title: draft.title,
-          level: draft.level || null,
-          work_mode: draft.work_mode || null,
-          city: (draft.city || '').trim() || null,
-          state: (draft.state || '').trim() || null,
-          country: (draft.country || '').trim() || null,
-          // Keep `location` aligned with the structured fields for back-compat.
-          location: formatLocation(draft) || null,
-        })
-        .eq('id', roleId);
-      if (error) throw error;
+      // updateRole transparently retries without work_mode/city/state/country
+      // if those columns don't exist (i.e. migration 0007 not yet applied).
+      return updateRole(supabase, roleId, {
+        jd_html: draft.jd_html,
+        jd_source: role?.jd_source === 'uploaded' ? 'inline' : (role?.jd_source || 'inline'),
+        sr_number: draft.sr_number || null,
+        title: draft.title,
+        level: draft.level || null,
+        work_mode: draft.work_mode || null,
+        city: (draft.city || '').trim() || null,
+        state: (draft.state || '').trim() || null,
+        country: (draft.country || '').trim() || null,
+        // Keep `location` aligned with the structured fields for back-compat.
+        location: formatLocation(draft) || null,
+      });
     },
-    onSuccess: () => {
-      toast.success('Role saved');
+    onSuccess: ({ schemaWasLegacy } = {}) => {
+      if (schemaWasLegacy) {
+        toast.success('Role saved (note: run migration 0007 to enable structured location fields)');
+      } else {
+        toast.success('Role saved');
+      }
       qc.invalidateQueries({ queryKey: ['role', roleId] });
       qc.invalidateQueries({ queryKey: ['roles', projectId] });
     },
@@ -135,6 +130,17 @@ export default function RoleDetailPage() {
   });
 
   if (isLoading) return <Spinner />;
+  if (roleError) {
+    return (
+      <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">
+        <div className="font-medium mb-1">Couldn't load this role.</div>
+        <div className="text-xs text-rose-300/90 break-words">{roleError.message || String(roleError)}</div>
+        <div className="text-xs text-slate-400 mt-2">
+          If you recently updated Slate but haven't run the latest SQL migration in Supabase yet, that's the most likely cause. Open Supabase → SQL Editor and run the unrun files in <code className="text-slate-300">supabase/migrations/</code>.
+        </div>
+      </div>
+    );
+  }
   if (!role) return <div className="text-slate-400">Role not found.</div>;
 
   return (

@@ -21,6 +21,7 @@ import { useAuth } from '../lib/AuthContext.jsx';
 import { useIsAdmin } from '../lib/useIsAdmin.js';
 import { defaultStageConfig } from '../lib/pipeline.js';
 import { deleteProject } from '../lib/api.js';
+import { fetchRoles, insertRole } from '../lib/queryHelpers.js';
 
 const ROLE_STATUS_TONE = {
   open:    'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
@@ -335,23 +336,24 @@ function ProjectDetailPanel({ projectId, isAdmin, onClose }) {
     },
   });
 
-  const { data: roles, isLoading: rolesLoading } = useQuery({
+  const { data: roles, isLoading: rolesLoading, error: rolesError } = useQuery({
     queryKey: ['roles', projectId],
     queryFn: async () => {
-      const [rolesRes, candidatesRes] = await Promise.all([
-        supabase.from('roles')
-          .select('id, sr_number, title, location, work_mode, city, state, country, level, status, created_at')
-          .eq('project_id', projectId)
-          .order('created_at', { ascending: false }),
+      const [rolesData, candidatesRes] = await Promise.all([
+        // Use the fallback-aware fetcher so this works whether or not migration
+        // 0007 (structured-location columns) has been applied.
+        fetchRoles(supabase, [
+          (b) => b.eq('project_id', projectId),
+          (b) => b.order('created_at', { ascending: false }),
+        ]),
         supabase.from('candidates').select('id, role_id, status'),
       ]);
-      if (rolesRes.error) throw rolesRes.error;
       const counts = {};
       (candidatesRes.data || []).forEach((c) => {
         if (c.status !== 'active') return;
         counts[c.role_id] = (counts[c.role_id] || 0) + 1;
       });
-      return (rolesRes.data || []).map((r) => ({ ...r, activeCandidates: counts[r.id] || 0 }));
+      return (rolesData || []).map((r) => ({ ...r, activeCandidates: counts[r.id] || 0 }));
     },
   });
 
@@ -386,25 +388,19 @@ function ProjectDetailPanel({ projectId, isAdmin, onClose }) {
   const createRole = useMutation({
     mutationFn: async (form) => {
       if (!form.title?.trim()) throw new Error('Title is required.');
-      const { data, error } = await supabase
-        .from('roles')
-        .insert({
-          project_id: projectId,
-          sr_number: (form.sr_number || '').trim() || null,
-          title: form.title.trim(),
-          level: (form.level || '').trim() || null,
-          work_mode: form.work_mode || null,
-          city: (form.city || '').trim() || null,
-          state: (form.state || '').trim() || null,
-          country: (form.country || '').trim() || null,
-          jd_source: 'inline',
-          jd_html: '',
-          stage_config: defaultStageConfig(),
-        })
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      return insertRole(supabase, {
+        project_id: projectId,
+        sr_number: (form.sr_number || '').trim() || null,
+        title: form.title.trim(),
+        level: (form.level || '').trim() || null,
+        work_mode: form.work_mode || null,
+        city: (form.city || '').trim() || null,
+        state: (form.state || '').trim() || null,
+        country: (form.country || '').trim() || null,
+        jd_source: 'inline',
+        jd_html: '',
+        stage_config: defaultStageConfig(),
+      });
     },
     onSuccess: (data) => {
       toast.success('Role created');
@@ -475,7 +471,15 @@ function ProjectDetailPanel({ projectId, isAdmin, onClose }) {
       )}
 
       <div className="px-4 py-4">
-        {rolesLoading ? (
+        {rolesError ? (
+          <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">
+            <div className="font-medium mb-1">Couldn't load roles for this project.</div>
+            <div className="text-xs text-rose-300/90 break-words">{rolesError.message || String(rolesError)}</div>
+            <div className="text-xs text-slate-400 mt-2">
+              If you recently updated Slate but haven't run the latest SQL migration in Supabase yet, that's the most likely cause. Open Supabase → SQL Editor and run any unrun migrations from <code className="text-slate-300">supabase/migrations/</code>.
+            </div>
+          </div>
+        ) : rolesLoading ? (
           <SkeletonRows rows={4} height="h-20" />
         ) : !roles?.length ? (
           <EmptyState
