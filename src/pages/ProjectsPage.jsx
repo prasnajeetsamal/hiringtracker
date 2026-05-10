@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Plus, FolderKanban, ArrowRight, Archive, Briefcase, Users,
-  Trash2, ArchiveRestore, MapPin,
+  Trash2, ArchiveRestore, MapPin, X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
@@ -14,7 +14,7 @@ import Button from '../components/common/Button.jsx';
 import Modal from '../components/common/Modal.jsx';
 import EmptyState from '../components/common/EmptyState.jsx';
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx';
-import { SkeletonRows } from '../components/common/Skeleton.jsx';
+import { SkeletonGrid, SkeletonRows } from '../components/common/Skeleton.jsx';
 import LocationFields, { formatLocation } from '../components/common/LocationFields.jsx';
 import { supabase } from '../lib/supabase.js';
 import { useAuth } from '../lib/AuthContext.jsx';
@@ -30,14 +30,20 @@ const ROLE_STATUS_TONE = {
 };
 
 /**
- * Unified Projects + ProjectDetail page rendered as a master/detail split.
+ * Hiring Projects page.
  *
- *   /projects              → list visible, right panel shows "Pick a project"
- *   /projects/:projectId   → list visible (selection highlighted), right
- *                            panel shows that project's roles + actions
+ *   /projects            → full-width grid of project cards (no detail panel)
+ *   /projects/:projectId → grid still visible but condensed; right-side panel
+ *                          slides in showing the selected project's roles
+ *                          and actions. Close X returns to /projects.
  *
- * Routes for individual roles (`/projects/:p/roles/:r`) still go to the
- * full-page RoleDetailPage as before.
+ * The collapsible panel pattern preserves context — the project list stays
+ * visible while a single project is being inspected. Clicking another card
+ * swaps the panel to that project; clicking the close button or pressing
+ * Escape returns to the full grid.
+ *
+ * Individual role pages (`/projects/:p/roles/:r`) still go to a full-page
+ * RoleDetailPage.
  */
 export default function ProjectsPage() {
   const { projectId } = useParams();
@@ -48,6 +54,16 @@ export default function ProjectsPage() {
 
   const [showArchived, setShowArchived] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
+
+  // Allow Escape to close the side panel.
+  useEffect(() => {
+    if (!projectId) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') navigate('/projects');
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [projectId, navigate]);
 
   const { data: projects, isLoading } = useQuery({
     queryKey: ['projects', { showArchived }],
@@ -106,11 +122,15 @@ export default function ProjectsPage() {
     onError: (e) => toast.error(e.message),
   });
 
+  const panelOpen = !!projectId;
+
   return (
     <>
       <PageHeader
         title="Hiring Projects"
-        subtitle="Pick a project on the left to manage its roles."
+        subtitle={panelOpen
+          ? 'Click another project to swap the panel, or close to see all projects.'
+          : 'Click a project to open its roles in a side panel.'}
         actions={
           <>
             <button
@@ -133,19 +153,39 @@ export default function ProjectsPage() {
         }
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4">
-        {/* MASTER: project list */}
-        <Card padding={false} className="h-fit lg:sticky lg:top-4 max-h-[calc(100vh-7rem)] overflow-y-auto">
+      {/*
+        Layout:
+        - When NO project is selected, the grid spans the full width.
+        - When a project IS selected, the layout becomes a 2-column grid:
+          left = project cards (squeezed; uses auto-fit so cards rewrap),
+          right = sticky detail panel.
+      */}
+      <div
+        className={clsx(
+          'grid gap-4 transition-[grid-template-columns] duration-300',
+          panelOpen ? 'grid-cols-1 xl:grid-cols-[minmax(0,1fr)_640px]' : 'grid-cols-1'
+        )}
+      >
+        {/* PROJECT GRID */}
+        <div className="min-w-0">
           {isLoading ? (
-            <div className="p-3"><SkeletonRows rows={5} height="h-14" /></div>
+            <SkeletonGrid count={6} className="h-44" />
           ) : !visibleProjects.length ? (
-            <div className="p-4 text-sm text-slate-500">
-              {(projects?.length || 0) === 0
-                ? 'No projects yet. Click "New project" to create one.'
-                : 'No projects match. Toggle "Show archived" to see archived ones.'}
-            </div>
+            <EmptyState
+              icon={FolderKanban}
+              title="No hiring projects yet"
+              description="Create your first hiring project to start tracking roles and candidates."
+              action={<Button icon={Plus} onClick={() => setNewProjectOpen(true)}>Create project</Button>}
+            />
           ) : (
-            <div className="divide-y divide-slate-800/60">
+            <div
+              className="grid gap-4"
+              style={{
+                gridTemplateColumns: panelOpen
+                  ? 'repeat(auto-fill, minmax(220px, 1fr))'
+                  : 'repeat(auto-fill, minmax(280px, 1fr))',
+              }}
+            >
               {visibleProjects.map((p) => {
                 const isSelected = p.id === projectId;
                 return (
@@ -153,62 +193,76 @@ export default function ProjectsPage() {
                     key={p.id}
                     type="button"
                     onClick={() => navigate(`/projects/${p.id}`)}
-                    className={clsx(
-                      'w-full text-left px-3 py-2.5 transition border-l-2',
-                      isSelected
-                        ? 'bg-indigo-500/10 border-indigo-500/60'
-                        : 'border-transparent hover:bg-slate-900/60'
-                    )}
+                    className="text-left group"
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          {p.status === 'archived' ? (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[9px] uppercase tracking-wider">
-                              <Archive size={8} /> archived
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 text-[9px] uppercase tracking-wider">
-                              active
-                            </span>
+                    <Card
+                      className={clsx(
+                        'h-full transition relative overflow-hidden',
+                        isSelected
+                          ? 'border-indigo-500/60 ring-1 ring-indigo-500/40 shadow-indigo-500/15'
+                          : 'hover:border-indigo-500/40 hover:shadow-indigo-500/10'
+                      )}
+                    >
+                      <div className="pointer-events-none absolute -top-12 -right-12 w-40 h-40 rounded-full bg-indigo-500/10 blur-3xl group-hover:bg-indigo-500/20 transition" />
+                      <div className="relative flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            {p.status === 'archived' ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[10px]">
+                                <Archive size={9} /> archived
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 text-[10px]">
+                                active
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-base font-semibold text-slate-100 mt-1.5 truncate">{p.name}</div>
+                          {p.description && (
+                            <div className="text-xs text-slate-400 mt-1 line-clamp-2">{p.description}</div>
                           )}
                         </div>
-                        <div className="text-sm font-medium text-slate-100 truncate">{p.name}</div>
-                        <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-2">
-                          <span className="flex items-center gap-1">
-                            <Briefcase size={9} /> {p.roleCount}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Users size={9} /> {p.activeCandidates}
-                          </span>
+                        <ArrowRight
+                          size={16}
+                          className={clsx(
+                            'transition shrink-0 mt-1',
+                            isSelected
+                              ? 'text-indigo-300'
+                              : 'text-slate-500 group-hover:text-indigo-300 group-hover:translate-x-0.5'
+                          )}
+                        />
+                      </div>
+                      <div className="relative mt-4 pt-3 border-t border-slate-800/60 grid grid-cols-2 gap-3 text-xs">
+                        <div className="flex items-center gap-1.5 text-slate-300">
+                          <Briefcase size={11} className="text-violet-300" />
+                          <span className="font-semibold text-slate-100 tabular-nums">{p.roleCount}</span>
+                          <span className="text-slate-500">{p.roleCount === 1 ? 'role' : 'roles'}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-slate-300">
+                          <Users size={11} className="text-emerald-300" />
+                          <span className="font-semibold text-slate-100 tabular-nums">{p.activeCandidates}</span>
+                          <span className="text-slate-500">{p.activeCandidates === 1 ? 'candidate' : 'candidates'}</span>
                         </div>
                       </div>
-                      <ArrowRight size={12} className={isSelected ? 'text-indigo-300' : 'text-slate-600'} />
-                    </div>
+                    </Card>
                   </button>
                 );
               })}
             </div>
           )}
-        </Card>
-
-        {/* DETAIL panel */}
-        <div className="min-w-0">
-          {!projectId ? (
-            <EmptyState
-              icon={FolderKanban}
-              title="Pick a project on the left"
-              description={
-                visibleProjects.length === 0
-                  ? "Or click 'New project' above to create one."
-                  : "Or click 'New project' above to create another."
-              }
-              action={<Button icon={Plus} onClick={() => setNewProjectOpen(true)}>New project</Button>}
-            />
-          ) : (
-            <ProjectDetailPanel projectId={projectId} isAdmin={isAdmin} />
-          )}
         </div>
+
+        {/* SIDE PANEL */}
+        {panelOpen && (
+          <div className="min-w-0 xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
+            <ProjectDetailPanel
+              key={projectId}
+              projectId={projectId}
+              isAdmin={isAdmin}
+              onClose={() => navigate('/projects')}
+            />
+          </div>
+        )}
       </div>
 
       <Modal
@@ -260,9 +314,9 @@ function NewProjectForm({ onCancel, onSubmit, loading }) {
   );
 }
 
-// ─── detail panel: project roles + actions ────────────────────────────
+// ─── side panel: project roles + actions ──────────────────────────────
 
-function ProjectDetailPanel({ projectId, isAdmin }) {
+function ProjectDetailPanel({ projectId, isAdmin, onClose }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [newRoleOpen, setNewRoleOpen] = useState(false);
@@ -361,103 +415,122 @@ function ProjectDetailPanel({ projectId, isAdmin }) {
     onError: (e) => toast.error(e.message),
   });
 
-  if (projectLoading) return <div className="p-4 text-slate-400"><SkeletonRows rows={3} height="h-12" /></div>;
-  if (!project) return <div className="text-slate-400 p-4">Project not found.</div>;
-
   return (
-    <div className="space-y-4">
-      <Card>
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 mb-1.5">
-              {project.status === 'archived' ? (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[10px] uppercase tracking-wider">
-                  <Archive size={9} /> archived
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 text-[10px] uppercase tracking-wider">
-                  active
-                </span>
+    <Card padding={false} className="relative">
+      {/* Sticky panel header — close button always visible */}
+      <div className="sticky top-0 z-10 flex items-start justify-between gap-3 px-4 py-3 border-b border-slate-800 bg-slate-900/95 backdrop-blur">
+        <div className="min-w-0 flex-1">
+          {projectLoading ? (
+            <SkeletonRows rows={1} height="h-6" />
+          ) : !project ? (
+            <div className="text-slate-400 text-sm">Project not found.</div>
+          ) : (
+            <>
+              <div className="flex items-center gap-2 mb-0.5">
+                {project.status === 'archived' ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[10px] uppercase tracking-wider">
+                    <Archive size={9} /> archived
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 text-[10px] uppercase tracking-wider">
+                    active
+                  </span>
+                )}
+                <span className="text-[11px] text-slate-500">created {new Date(project.created_at).toLocaleDateString()}</span>
+              </div>
+              <h2 className="text-base font-semibold text-slate-100 truncate">{project.name}</h2>
+              {project.description && (
+                <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-2">{project.description}</p>
               )}
-              <span className="text-[11px] text-slate-500">created {new Date(project.created_at).toLocaleDateString()}</span>
-            </div>
-            <h2 className="text-xl font-semibold text-slate-100">{project.name}</h2>
-            {project.description && (
-              <p className="text-sm text-slate-400 mt-1">{project.description}</p>
-            )}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button icon={Plus} onClick={() => setNewRoleOpen(true)}>New role</Button>
-            {project.status === 'archived' ? (
-              <Button variant="secondary" icon={ArchiveRestore} onClick={() => archive.mutate('active')} loading={archive.isPending}>
-                Restore
-              </Button>
-            ) : (
-              <Button variant="secondary" icon={Archive} onClick={() => archive.mutate('archived')} loading={archive.isPending}>
-                Archive
-              </Button>
-            )}
-            {isAdmin && (
-              <Button variant="danger" icon={Trash2} onClick={() => setConfirmDeleteOpen(true)}>
-                Delete
-              </Button>
-            )}
-          </div>
+            </>
+          )}
         </div>
-      </Card>
+        <button
+          onClick={onClose}
+          className="text-slate-400 hover:text-slate-100 p-1 rounded-md hover:bg-slate-800/60 shrink-0"
+          title="Close panel (Esc)"
+        >
+          <X size={16} />
+        </button>
+      </div>
 
-      {rolesLoading ? (
-        <SkeletonRows rows={4} height="h-24" />
-      ) : !roles?.length ? (
-        <EmptyState
-          icon={Briefcase}
-          title="No roles in this project yet"
-          description="Add an open role to start collecting candidates."
-          action={<Button icon={Plus} onClick={() => setNewRoleOpen(true)}>Add role</Button>}
-        />
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {roles.map((r) => {
-            const tone = ROLE_STATUS_TONE[r.status] || ROLE_STATUS_TONE.closed;
-            const loc = formatLocation(r);
-            return (
-              <button
-                key={r.id}
-                type="button"
-                onClick={() => navigate(`/projects/${projectId}/roles/${r.id}`)}
-                className="text-left group"
-              >
-                <Card className="h-full hover:border-indigo-500/40 hover:shadow-indigo-500/10 transition relative overflow-hidden">
-                  <div className="pointer-events-none absolute -top-12 -right-12 w-40 h-40 rounded-full bg-violet-500/10 blur-3xl group-hover:bg-violet-500/20 transition" />
-                  <div className="relative flex items-start justify-between gap-3">
+      {project && (
+        <div className="px-4 pt-3 pb-4 flex flex-wrap gap-2 border-b border-slate-800/60">
+          <Button size="sm" icon={Plus} onClick={() => setNewRoleOpen(true)}>New role</Button>
+          {project.status === 'archived' ? (
+            <Button size="sm" variant="secondary" icon={ArchiveRestore} onClick={() => archive.mutate('active')} loading={archive.isPending}>
+              Restore
+            </Button>
+          ) : (
+            <Button size="sm" variant="secondary" icon={Archive} onClick={() => archive.mutate('archived')} loading={archive.isPending}>
+              Archive
+            </Button>
+          )}
+          {isAdmin && (
+            <Button size="sm" variant="danger" icon={Trash2} onClick={() => setConfirmDeleteOpen(true)}>
+              Delete
+            </Button>
+          )}
+        </div>
+      )}
+
+      <div className="px-4 py-4">
+        {rolesLoading ? (
+          <SkeletonRows rows={4} height="h-20" />
+        ) : !roles?.length ? (
+          <EmptyState
+            icon={Briefcase}
+            title="No roles in this project yet"
+            description="Add an open role to start collecting candidates."
+            action={<Button size="sm" icon={Plus} onClick={() => setNewRoleOpen(true)}>Add role</Button>}
+          />
+        ) : (
+          <div className="space-y-2">
+            <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1 px-1">
+              Roles ({roles.length})
+            </div>
+            {roles.map((r) => {
+              const tone = ROLE_STATUS_TONE[r.status] || ROLE_STATUS_TONE.closed;
+              const loc = formatLocation(r);
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => navigate(`/projects/${projectId}/roles/${r.id}`)}
+                  className="w-full text-left rounded-lg border border-slate-800 bg-slate-900/40 hover:border-indigo-500/40 hover:bg-slate-900/70 px-3 py-2.5 transition group"
+                >
+                  <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[10px] capitalize ${tone}`}>
-                        {r.status.replace('_', ' ')}
-                      </span>
-                      <div className="text-base font-semibold text-slate-100 mt-1.5 truncate">{r.title}</div>
-                      <div className="text-xs text-slate-400 mt-1 flex items-center gap-2 flex-wrap">
-                        {r.sr_number && <span className="font-mono">SR {r.sr_number}</span>}
-                        {r.level && <span>· {r.level}</span>}
+                      <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                        <span className={`inline-flex items-center px-1.5 py-0 rounded-full border text-[9px] capitalize ${tone}`}>
+                          {r.status.replace('_', ' ')}
+                        </span>
+                        {r.sr_number && (
+                          <span className="text-[10px] text-slate-500 font-mono">SR {r.sr_number}</span>
+                        )}
+                        {r.level && <span className="text-[10px] text-slate-500">{r.level}</span>}
                       </div>
+                      <div className="text-sm font-medium text-slate-100 truncate">{r.title}</div>
                       {loc && (
-                        <div className="text-[11px] text-slate-500 mt-1.5 flex items-center gap-1">
+                        <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1">
                           <MapPin size={10} /> {loc}
                         </div>
                       )}
                     </div>
-                    <ArrowRight size={16} className="text-slate-500 group-hover:text-indigo-300 group-hover:translate-x-0.5 transition shrink-0 mt-1" />
+                    <div className="flex items-center gap-2 shrink-0 mt-0.5">
+                      <div className="flex items-center gap-1 text-[11px] text-slate-300">
+                        <Users size={10} className="text-emerald-300" />
+                        <span className="font-semibold text-slate-100 tabular-nums">{r.activeCandidates}</span>
+                      </div>
+                      <ArrowRight size={12} className="text-slate-500 group-hover:text-indigo-300 group-hover:translate-x-0.5 transition" />
+                    </div>
                   </div>
-                  <div className="relative mt-4 pt-3 border-t border-slate-800/60 flex items-center gap-1.5 text-xs text-slate-300">
-                    <Users size={11} className="text-emerald-300" />
-                    <span className="font-semibold text-slate-100 tabular-nums">{r.activeCandidates}</span>
-                    <span className="text-slate-500">active {r.activeCandidates === 1 ? 'candidate' : 'candidates'}</span>
-                  </div>
-                </Card>
-              </button>
-            );
-          })}
-        </div>
-      )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       <Modal
         open={newRoleOpen}
@@ -480,13 +553,15 @@ function ProjectDetailPanel({ projectId, isAdmin }) {
         loading={removeProject.isPending}
         title="Delete project?"
         message={
-          <>
-            <p>This permanently removes <strong className="text-slate-100">{project.name}</strong>, every role within it, every candidate on those roles, all pipeline rows, feedback, comments, resume + JD files, and project memberships.</p>
-            <p className="mt-2 text-rose-300 text-xs">This cannot be undone. Use Archive if you just want to hide it.</p>
-          </>
+          project && (
+            <>
+              <p>This permanently removes <strong className="text-slate-100">{project.name}</strong>, every role within it, every candidate on those roles, all pipeline rows, feedback, comments, resume + JD files, and project memberships.</p>
+              <p className="mt-2 text-rose-300 text-xs">This cannot be undone. Use Archive if you just want to hide it.</p>
+            </>
+          )
         }
       />
-    </div>
+    </Card>
   );
 }
 
