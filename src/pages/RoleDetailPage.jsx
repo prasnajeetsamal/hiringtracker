@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Save, Briefcase, FileText, Sliders, Upload, FileBox, Trash2 } from 'lucide-react';
+import { ArrowLeft, Save, Briefcase, FileText, Sliders, Upload, FileBox, Trash2, Archive, ArchiveRestore } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import PageHeader from '../components/common/PageHeader.jsx';
@@ -11,6 +11,7 @@ import Modal from '../components/common/Modal.jsx';
 import FileDrop from '../components/common/FileDrop.jsx';
 import Spinner from '../components/common/Spinner.jsx';
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx';
+import LocationFields, { formatLocation } from '../components/common/LocationFields.jsx';
 
 import JDEditor from '../components/jd/JDEditor.jsx';
 import JDTemplatePicker from '../components/jd/JDTemplatePicker.jsx';
@@ -33,7 +34,7 @@ export default function RoleDetailPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('roles')
-        .select('id, project_id, sr_number, title, location, level, status, jd_html, jd_source, stage_config')
+        .select('id, project_id, sr_number, title, level, status, jd_html, jd_source, stage_config, location, work_mode, city, state, country')
         .eq('id', roleId)
         .single();
       if (error) throw error;
@@ -41,7 +42,10 @@ export default function RoleDetailPage() {
     },
   });
 
-  const [draft, setDraft] = useState({ jd_html: '', sr_number: '', title: '', location: '', level: '' });
+  const [draft, setDraft] = useState({
+    jd_html: '', sr_number: '', title: '', level: '',
+    work_mode: null, city: '', state: '', country: '',
+  });
   const [pickOpen, setPickOpen] = useState(false);
   const [stageOpen, setStageOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -53,8 +57,11 @@ export default function RoleDetailPage() {
         jd_html: role.jd_html || '',
         sr_number: role.sr_number || '',
         title: role.title || '',
-        location: role.location || '',
         level: role.level || '',
+        work_mode: role.work_mode || null,
+        city: role.city || '',
+        state: role.state || '',
+        country: role.country || '',
       });
     }
   }, [role]);
@@ -68,8 +75,13 @@ export default function RoleDetailPage() {
           jd_source: role?.jd_source === 'uploaded' ? 'inline' : (role?.jd_source || 'inline'),
           sr_number: draft.sr_number || null,
           title: draft.title,
-          location: draft.location || null,
           level: draft.level || null,
+          work_mode: draft.work_mode || null,
+          city: (draft.city || '').trim() || null,
+          state: (draft.state || '').trim() || null,
+          country: (draft.country || '').trim() || null,
+          // Keep `location` aligned with the structured fields for back-compat.
+          location: formatLocation(draft) || null,
         })
         .eq('id', roleId);
       if (error) throw error;
@@ -77,6 +89,20 @@ export default function RoleDetailPage() {
     onSuccess: () => {
       toast.success('Role saved');
       qc.invalidateQueries({ queryKey: ['role', roleId] });
+      qc.invalidateQueries({ queryKey: ['roles', projectId] });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const archive = useMutation({
+    mutationFn: async (next) => {
+      const { error } = await supabase.from('roles').update({ status: next }).eq('id', roleId);
+      if (error) throw error;
+    },
+    onSuccess: (_, next) => {
+      toast.success(next === 'closed' ? 'Role archived' : 'Role reopened');
+      qc.invalidateQueries({ queryKey: ['role', roleId] });
+      qc.invalidateQueries({ queryKey: ['roles', projectId] });
     },
     onError: (e) => toast.error(e.message),
   });
@@ -120,10 +146,15 @@ export default function RoleDetailPage() {
           </Link>
         }
         title={role.title}
-        subtitle={[role.sr_number && `SR ${role.sr_number}`, role.level, role.location].filter(Boolean).join(' · ') || 'Role details'}
+        subtitle={[role.sr_number && `SR ${role.sr_number}`, role.level, formatLocation(role)].filter(Boolean).join(' · ') || 'Role details'}
         actions={
           <>
             <Button icon={Save} onClick={() => save.mutate()} loading={save.isPending}>Save role</Button>
+            {role.status === 'closed' ? (
+              <Button variant="secondary" icon={ArchiveRestore} onClick={() => archive.mutate('open')} loading={archive.isPending}>Reopen</Button>
+            ) : (
+              <Button variant="secondary" icon={Archive} onClick={() => archive.mutate('closed')} loading={archive.isPending}>Archive</Button>
+            )}
             {isAdmin && (
               <Button variant="danger" icon={Trash2} onClick={() => setConfirmDeleteOpen(true)}>Delete role</Button>
             )}
@@ -161,9 +192,10 @@ export default function RoleDetailPage() {
               <Field label="Level">
                 <Input value={draft.level} onChange={(v) => setDraft({ ...draft, level: v })} />
               </Field>
-              <Field label="Location">
-                <Input value={draft.location} onChange={(v) => setDraft({ ...draft, location: v })} />
-              </Field>
+              <LocationFields
+                value={draft}
+                onChange={(patch) => setDraft({ ...draft, ...patch })}
+              />
             </div>
           </Card>
 
@@ -231,7 +263,10 @@ export default function RoleDetailPage() {
 
 function PipelineSummary({ stageConfig }) {
   const cfg = Array.isArray(stageConfig) ? stageConfig : [];
-  const STAGES_ORDER = ['resume_submitted','hm_review','technical_written','technical_interview','problem_solving','case_study','offer'];
+  const STAGES_ORDER = [
+    'resume_submitted','hm_review','technical_written','technical_interview',
+    'problem_solving','case_study','offer','joined_fractal','rejected_offer',
+  ];
   const labels = {
     resume_submitted: 'Submitted',
     hm_review: 'HM Review',
@@ -240,6 +275,8 @@ function PipelineSummary({ stageConfig }) {
     problem_solving: 'Problem Solving',
     case_study: 'Case Study',
     offer: 'Offer',
+    joined_fractal: 'Joined',
+    rejected_offer: 'Declined',
   };
   return (
     <ul className="space-y-1 text-sm">

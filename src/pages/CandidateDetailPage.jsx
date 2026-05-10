@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, ArrowRight, X, SkipForward, Sparkles, Linkedin, Mail, Phone,
-  FileText, Wand2, MessageSquare, Trash2, Copy,
+  FileText, Wand2, MessageSquare, Trash2, Copy, ChevronDown, ChevronUp, AlertCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -17,6 +17,7 @@ import RecommendationBadge from '../components/candidates/RecommendationBadge.js
 import InterviewerAssignment from '../components/candidates/InterviewerAssignment.jsx';
 import ConsiderForRoleDialog from '../components/candidates/ConsiderForRoleDialog.jsx';
 import ResumeView from '../components/candidates/ResumeView.jsx';
+import TagsEditor from '../components/candidates/TagsEditor.jsx';
 import FeedbackForm from '../components/feedback/FeedbackForm.jsx';
 import FeedbackTimeline from '../components/feedback/FeedbackTimeline.jsx';
 import CommentThread from '../components/comments/CommentThread.jsx';
@@ -35,6 +36,8 @@ export default function CandidateDetailPage() {
   const { isAdmin } = useIsAdmin();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [considerOpen, setConsiderOpen] = useState(false);
+  // Collapse the AI evaluation by default if it's been scored — saves space.
+  const [aiOpen, setAiOpen] = useState(false);
 
   const { data: candidate, isLoading } = useQuery({
     queryKey: ['candidate', candidateId],
@@ -43,7 +46,7 @@ export default function CandidateDetailPage() {
         .from('candidates')
         .select(`
           id, full_name, email, phone, linkedin_url, resume_text, resume_file_id,
-          source, current_stage_key, status, ai_score, ai_analysis, role_id, created_at,
+          source, current_stage_key, status, ai_score, ai_analysis, role_id, created_at, tags,
           role:roles ( id, title, project_id, stage_config,
             project:hiring_projects ( id, name )
           )
@@ -215,6 +218,21 @@ export default function CandidateDetailPage() {
     onError: (e) => toast.error(e.message),
   });
 
+  const updateTags = useMutation({
+    mutationFn: async (tags) => {
+      const { error } = await supabase
+        .from('candidates')
+        .update({ tags })
+        .eq('id', candidateId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['candidate', candidateId] });
+      qc.invalidateQueries({ queryKey: ['candidates-all'] });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   const remove = useMutation({
     mutationFn: async () => deleteCandidate({ candidateId }),
     onSuccess: () => {
@@ -251,6 +269,12 @@ export default function CandidateDetailPage() {
   const isTerminal = candidate.status === 'rejected' || candidate.status === 'hired';
   const ai = candidate.ai_analysis;
   const brief = ai?.committee_brief;
+
+  // Banner: am I an interviewer assigned to the candidate's CURRENT stage, with no feedback?
+  const currentPipelineRow = (pipeline || []).find((p) => p.stage_key === candidate.current_stage_key);
+  const myFeedbackOnCurrent = currentPipelineRow ? myFeedbackByPipeline[currentPipelineRow.id] : null;
+  const myPendingOnCurrent =
+    currentPipelineRow && myAssignedPipelines.has(currentPipelineRow.id) && !myFeedbackOnCurrent;
 
   return (
     <>
@@ -289,14 +313,46 @@ export default function CandidateDetailPage() {
         }
       />
 
+      {/* Pending-feedback banner */}
+      {myPendingOnCurrent && currentPipelineRow && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 mb-4 flex items-center gap-3">
+          <AlertCircle size={18} className="text-amber-300 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="text-sm text-slate-100 font-medium">
+              Your feedback is pending on the {STAGE_BY_KEY[currentPipelineRow.stage_key]?.label || currentPipelineRow.stage_key} round.
+            </div>
+            <div className="text-xs text-slate-400">
+              Scroll down to the {STAGE_BY_KEY[currentPipelineRow.stage_key]?.label || 'stage'} card to submit your recommendation.
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 space-y-4">
-          {/* AI evaluation */}
-          <Card>
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2 text-slate-200">
-                <Sparkles size={16} className="text-indigo-300" /><span className="font-medium">AI evaluation</span>
-              </div>
+          {/* AI evaluation — collapsible (collapsed by default once scored) */}
+          <Card padding={false}>
+            <div className="flex items-center justify-between px-5 py-3">
+              <button
+                type="button"
+                onClick={() => ai && setAiOpen((v) => !v)}
+                className="flex items-center gap-2 text-slate-200 flex-1 min-w-0 text-left"
+                disabled={!ai}
+              >
+                <Sparkles size={16} className="text-indigo-300 shrink-0" />
+                <span className="font-medium">AI evaluation</span>
+                {ai && (
+                  <>
+                    <span className="text-2xl font-bold text-slate-100 ml-2 tabular-nums">{ai.overallScore ?? '—'}</span>
+                    <span className="text-[10px] text-slate-500 mt-0.5">/100</span>
+                    <RecommendationBadge value={ai.recommendation} />
+                    <ChevronDown
+                      size={14}
+                      className={`text-slate-500 ml-auto transition ${aiOpen ? 'rotate-180' : ''}`}
+                    />
+                  </>
+                )}
+              </button>
               <Button
                 size="sm"
                 variant="secondary"
@@ -305,20 +361,27 @@ export default function CandidateDetailPage() {
                 loading={score.isPending}
                 disabled={!candidate.resume_text}
                 title={!candidate.resume_text ? 'AI scoring needs an uploaded resume' : 'Score this candidate against the JD'}
+                className="ml-2"
               >
                 {ai ? 'Re-score' : 'Score against JD'}
               </Button>
             </div>
             {!candidate.resume_text ? (
-              <div className="text-sm text-slate-400">
+              <div className="px-5 pb-4 text-sm text-slate-400">
                 AI scoring is unavailable for LinkedIn-only candidates. Upload a resume to enable it.
               </div>
             ) : !ai ? (
-              <div className="text-sm text-slate-400">
+              <div className="px-5 pb-4 text-sm text-slate-400">
                 Click <strong>Score against JD</strong> to have Claude evaluate the resume against this role's JD.
               </div>
+            ) : aiOpen ? (
+              <div className="px-5 pb-5 border-t border-slate-800/60 pt-4">
+                <AIEvaluation ai={ai} />
+              </div>
             ) : (
-              <AIEvaluation ai={ai} />
+              <div className="px-5 pb-3 text-xs text-slate-400 italic line-clamp-2">
+                {ai.summary || 'Click to expand the full evaluation.'}
+              </div>
             )}
           </Card>
 
@@ -342,10 +405,41 @@ export default function CandidateDetailPage() {
                         <span className="text-sm font-medium text-slate-100">{stage?.label || p.stage_key}</span>
                         <StageBadge stageKey={p.stage_key} state={p.state} size="sm" />
                       </div>
-                      <span className="text-[11px] text-slate-500">
-                        {p.completed_at ? `Completed ${new Date(p.completed_at).toLocaleDateString()}` :
-                         p.started_at ? `Started ${new Date(p.started_at).toLocaleDateString()}` : ''}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-slate-500">
+                          {p.completed_at ? `Completed ${new Date(p.completed_at).toLocaleDateString()}` :
+                           p.started_at ? `Started ${new Date(p.started_at).toLocaleDateString()}` : ''}
+                        </span>
+                        {/* Quick actions appear ONLY on the current active stage so the user can advance/skip/reject right from the timeline card */}
+                        {isCurrent && (
+                          <div className="flex items-center gap-1 ml-1">
+                            <button
+                              onClick={() => skip.mutate()}
+                              disabled={skip.isPending}
+                              className="text-[11px] px-2 py-1 rounded-md text-slate-300 hover:text-slate-100 hover:bg-slate-800/60 border border-slate-700"
+                              title="Skip this stage"
+                            >
+                              Skip
+                            </button>
+                            <button
+                              onClick={() => reject.mutate()}
+                              disabled={reject.isPending}
+                              className="text-[11px] px-2 py-1 rounded-md text-rose-300 hover:text-rose-200 hover:bg-rose-500/10 border border-rose-500/30"
+                              title="Reject the candidate at this stage"
+                            >
+                              Reject
+                            </button>
+                            <button
+                              onClick={() => advance.mutate()}
+                              disabled={advance.isPending}
+                              className="text-[11px] px-2 py-1 rounded-md text-emerald-200 hover:text-emerald-100 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 inline-flex items-center gap-1"
+                              title="Advance to the next stage"
+                            >
+                              Advance <ArrowRight size={10} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                     {stageEnabledCfg?.what_to_expect && (
                       <div className="text-xs text-slate-400 mt-1">{stageEnabledCfg.what_to_expect}</div>
@@ -424,6 +518,15 @@ export default function CandidateDetailPage() {
                 Source: <span className="capitalize">{candidate.source}</span> · Added {new Date(candidate.created_at).toLocaleDateString()}
               </div>
             </div>
+          </Card>
+
+          <Card>
+            <div className="text-slate-200 font-medium mb-2 text-sm">Tags</div>
+            <TagsEditor
+              value={candidate.tags || []}
+              onChange={(next) => updateTags.mutate(next)}
+              suggestions={['internal-referral', 'priority', 'diversity', 'must-hire', 'reachout', 'callback']}
+            />
           </Card>
 
           {(siblings?.length || 0) > 0 && (

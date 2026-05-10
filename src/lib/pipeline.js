@@ -25,7 +25,7 @@ export const STAGES = [
     key: 'technical_interview',
     label: 'Technical Interview',
     short: 'Tech Interview',
-    whatToExpect: 'Live technical interview covering depth in the candidate’s primary area.',
+    whatToExpect: "Live technical interview covering depth in the candidate's primary area.",
   },
   {
     key: 'problem_solving',
@@ -44,6 +44,18 @@ export const STAGES = [
     label: 'Offer',
     short: 'Offer',
     whatToExpect: 'Offer extended; candidate decision pending.',
+  },
+  {
+    key: 'joined_fractal',
+    label: 'Joined Fractal',
+    short: 'Joined',
+    whatToExpect: 'Candidate accepted the offer and has joined.',
+  },
+  {
+    key: 'rejected_offer',
+    label: 'Rejected Offer',
+    short: 'Declined',
+    whatToExpect: 'Candidate declined the offer.',
   },
 ];
 

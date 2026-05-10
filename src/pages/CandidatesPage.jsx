@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Users, Download, Star, ArrowRight, Trash2, Plus, Activity, Layers, FolderKanban, Briefcase } from 'lucide-react';
+import { Users, Download, Star, ArrowRight, Trash2, Plus, Activity, Layers, FolderKanban, Briefcase, Tag as TagIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import PageHeader from '../components/common/PageHeader.jsx';
@@ -35,6 +35,7 @@ export default function CandidatesPage() {
   const [statusFilter, setStatusFilter] = useState('active');
   const [projectFilter, setProjectFilter] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
+  const [tagFilter, setTagFilter] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(null); // candidate row or null
   const [importOpen, setImportOpen] = useState(false);
 
@@ -56,7 +57,7 @@ export default function CandidatesPage() {
         .from('candidates')
         .select(`
           id, full_name, email, phone, source, current_stage_key, status, ai_score, ai_analysis,
-          created_at, role_id,
+          created_at, role_id, tags,
           role:roles ( id, title, project_id, project:hiring_projects ( id, name ) )
         `)
         .order('created_at', { ascending: false });
@@ -64,6 +65,13 @@ export default function CandidatesPage() {
       return data;
     },
   });
+
+  // Distinct tags across visible candidates — feed the tag dropdown.
+  const allTags = useMemo(() => {
+    const set = new Set();
+    (candidates || []).forEach((c) => (c.tags || []).forEach((t) => set.add(t)));
+    return [...set].sort();
+  }, [candidates]);
 
   const { data: roles } = useQuery({
     queryKey: ['roles-flat'],
@@ -114,9 +122,10 @@ export default function CandidatesPage() {
       if (statusFilter && c.status !== statusFilter) return false;
       if (projectFilter && c.role?.project_id !== projectFilter) return false;
       if (roleFilter && c.role_id !== roleFilter) return false;
+      if (tagFilter && !(c.tags || []).includes(tagFilter)) return false;
       return true;
     });
-  }, [candidates, search, stageFilter, statusFilter, projectFilter, roleFilter]);
+  }, [candidates, search, stageFilter, statusFilter, projectFilter, roleFilter, tagFilter]);
 
   const csv = useMemo(() => buildCSV(filtered), [filtered]);
 
@@ -151,7 +160,8 @@ export default function CandidatesPage() {
           (statusFilter !== 'active' ? 1 : 0) +
           (stageFilter ? 1 : 0) +
           (projectFilter ? 1 : 0) +
-          (roleFilter ? 1 : 0)
+          (roleFilter ? 1 : 0) +
+          (tagFilter ? 1 : 0)
         }
         onClearAll={() => {
           setSearch('');
@@ -159,6 +169,7 @@ export default function CandidatesPage() {
           setStageFilter('');
           setProjectFilter('');
           setRoleFilter('');
+          setTagFilter('');
         }}
       >
         <FilterSearch value={search} onChange={setSearch} placeholder="Search name, email…" />
@@ -203,6 +214,18 @@ export default function CandidatesPage() {
             })),
           ]}
         />
+        {allTags.length > 0 && (
+          <FilterSelect
+            label="Tag"
+            icon={TagIcon}
+            value={tagFilter}
+            onChange={setTagFilter}
+            options={[
+              { value: '', label: 'Any tag' },
+              ...allTags.map((t) => ({ value: t, label: t })),
+            ]}
+          />
+        )}
       </FilterBar>
 
       {isLoading ? (

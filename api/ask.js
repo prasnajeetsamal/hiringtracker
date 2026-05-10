@@ -26,6 +26,8 @@ const STAGE_LABELS = {
   problem_solving: 'Problem Solving',
   case_study: 'Case Study',
   offer: 'Offer',
+  joined_fractal: 'Joined Fractal',
+  rejected_offer: 'Rejected Offer',
 };
 
 const TOOLS = [

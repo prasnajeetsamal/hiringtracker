@@ -58,15 +58,39 @@ export default function Sidebar() {
   });
   const showPeople = profile?.role && ['admin', 'hiring_manager', 'hiring_team'].includes(profile.role);
 
+  // Pending feedback count → renders as a badge on the "Interviews" item.
+  // Cheap query: assignments WHERE interviewer_id = me, then count those without feedback.
+  const { data: pendingCount = 0 } = useQuery({
+    queryKey: ['sidebar-pending-feedback', user?.id],
+    enabled: !!user,
+    refetchInterval: 60_000, // poll every minute so the badge stays fresh
+    queryFn: async () => {
+      const { data: assigns } = await supabase
+        .from('interviewer_assignments')
+        .select('id, pipeline_id')
+        .eq('interviewer_id', user.id);
+      const pipelineIds = (assigns || []).map((a) => a.pipeline_id);
+      if (pipelineIds.length === 0) return 0;
+      const { data: fb } = await supabase
+        .from('feedback')
+        .select('pipeline_id')
+        .eq('interviewer_id', user.id)
+        .in('pipeline_id', pipelineIds);
+      const submitted = new Set((fb || []).map((f) => f.pipeline_id));
+      return pipelineIds.filter((id) => !submitted.has(id)).length;
+    },
+  });
+
   // Build the live sections array, appending People to Tools when allowed.
+  // Also attach a badge count to the "Interviews" item.
   const sections = SECTIONS.map((section) => {
+    let items = section.items.map((it) =>
+      it.to === '/my-interviews' ? { ...it, badge: pendingCount > 0 ? pendingCount : 0 } : it
+    );
     if (section.label === 'Tools' && showPeople) {
-      return {
-        ...section,
-        items: [...section.items, { to: '/people', label: 'People', icon: UserCog }],
-      };
+      items = [...items, { to: '/people', label: 'People', icon: UserCog }];
     }
-    return section;
+    return { ...section, items };
   });
 
   return (
@@ -94,7 +118,7 @@ export default function Sidebar() {
               {section.label}
             </div>
             <div className="space-y-0.5">
-              {section.items.map(({ to, label, icon: Icon, end }) => (
+              {section.items.map(({ to, label, icon: Icon, end, badge }) => (
                 <NavLink
                   key={to}
                   to={to}
@@ -109,7 +133,12 @@ export default function Sidebar() {
                   }
                 >
                   <Icon size={16} />
-                  <span>{label}</span>
+                  <span className="flex-1">{label}</span>
+                  {badge ? (
+                    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-semibold bg-rose-500/20 text-rose-200 border border-rose-500/40 tabular-nums">
+                      {badge > 99 ? '99+' : badge}
+                    </span>
+                  ) : null}
                 </NavLink>
               ))}
             </div>

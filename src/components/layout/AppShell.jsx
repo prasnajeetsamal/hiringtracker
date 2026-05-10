@@ -7,7 +7,6 @@ import ChatWidget from '../chat/ChatWidget.jsx';
 
 import DashboardPage from '../../pages/DashboardPage.jsx';
 import ProjectsPage from '../../pages/ProjectsPage.jsx';
-import ProjectDetailPage from '../../pages/ProjectDetailPage.jsx';
 import RoleDetailPage from '../../pages/RoleDetailPage.jsx';
 import CandidatesPage from '../../pages/CandidatesPage.jsx';
 import CandidateDetailPage from '../../pages/CandidateDetailPage.jsx';
@@ -32,7 +31,7 @@ export default function AppShell() {
           <Routes>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/projects" element={<ProjectsPage />} />
-            <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
+            <Route path="/projects/:projectId" element={<ProjectsPage />} />
             <Route path="/projects/:projectId/roles/:roleId" element={<RoleDetailPage />} />
             <Route path="/candidates" element={<CandidatesPage />} />
             <Route path="/candidates/:candidateId" element={<CandidateDetailPage />} />
