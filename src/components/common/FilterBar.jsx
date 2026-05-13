@@ -32,7 +32,7 @@ export default function FilterBar({ children, activeCount = 0, onClearAll, class
 /** Free-text search input, pill-shaped to match FilterSelect. */
 export function FilterSearch({ value, onChange, placeholder = 'Search…', className }) {
   return (
-    <div className={clsx('relative flex-1 min-w-[180px] max-w-xs', className)}>
+    <div className={clsx('relative flex-1 min-w-[140px] sm:min-w-[180px] max-w-xs', className)}>
       <Search
         size={13}
         className={clsx(

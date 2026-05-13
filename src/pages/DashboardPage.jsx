@@ -225,7 +225,7 @@ function KpiCard({ icon: Icon, label, value, sub, accent = 'indigo', spark, to }
         <div className="flex-1 min-w-0">
           <div className="text-xs text-slate-400">{label}</div>
           <div className="flex items-end justify-between gap-2">
-            <div className="text-3xl font-semibold text-slate-100 leading-none mt-1 tabular-nums">{value}</div>
+            <div className="text-2xl sm:text-3xl font-semibold text-slate-100 leading-none mt-1 tabular-nums">{value}</div>
             {spark && spark.length > 0 && (
               <Sparkline values={spark} color={accents.spark} width={64} height={22} />
             )}
@@ -347,13 +347,13 @@ function SeedDataCallout({ visible }) {
         <div className="text-xs text-slate-400 mt-0.5 leading-relaxed">
           Click <strong>Copy seed SQL</strong>, paste it into your Supabase project's SQL Editor, and click Run. It seeds ~5 candidates per role across all 7 stages, with AI scores, comments, and availability slots - and skips any role that already has real data. Tagged for easy bulk-delete later.
         </div>
-        <div className="flex gap-2 mt-3">
+        <div className="flex flex-col sm:flex-row gap-2 mt-3">
           <Button size="sm" icon={Copy} onClick={copy}>Copy seed SQL</Button>
           <a
             href="https://github.com/prasnajeetsamal/hiringtracker/blob/main/supabase/demo/seed_demo_data.sql"
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm text-slate-300 hover:text-slate-100 hover:bg-slate-800/60 transition border border-slate-700"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-sm text-slate-300 hover:text-slate-100 hover:bg-slate-800/60 transition border border-slate-700"
           >
             View on GitHub
           </a>
@@ -482,19 +482,19 @@ export default function DashboardPage() {
       {/* Funnel + side rails */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
         <Card className="lg:col-span-2">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
             <div className="flex items-center gap-2 text-slate-200">
               <TrendingUp size={16} className="text-indigo-300" />
               <span className="font-medium">Pipeline funnel</span>
             </div>
             {k.totalCandidates > 0 && (
-              <div className="flex items-center gap-3 text-[11px] text-slate-400">
+              <div className="flex items-center gap-2 sm:gap-3 text-[11px] text-slate-400 flex-wrap">
                 <span>Total: <strong className="text-slate-100">{k.totalCandidates}</strong></span>
-                <span>·</span>
+                <span className="hidden sm:inline">·</span>
                 <span>Hired: <strong className="text-emerald-300">{k.hiredCount}</strong></span>
-                <span>·</span>
+                <span className="hidden sm:inline">·</span>
                 <span>Rejected: <strong className="text-rose-300">{k.rejectedCount}</strong></span>
-                <span>·</span>
+                <span className="hidden sm:inline">·</span>
                 <span>Conversion: <strong className="text-slate-100">{conversion}%</strong></span>
               </div>
             )}

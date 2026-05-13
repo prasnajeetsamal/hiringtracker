@@ -416,7 +416,7 @@ export default function CandidatesPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-wide text-slate-500 border-b border-slate-800">
-                  <th className="pl-4 pr-2 py-2.5 font-medium w-8">
+                  <th className="pl-3 pr-2 py-2.5 font-medium w-8">
                     <input
                       type="checkbox"
                       className="w-4 h-4 accent-indigo-500"
@@ -428,13 +428,13 @@ export default function CandidatesPage() {
                       title="Select all visible"
                     />
                   </th>
-                  <th className="px-4 py-2.5 font-medium">Candidate</th>
-                  <th className="px-4 py-2.5 font-medium">Role / Project</th>
-                  <th className="px-4 py-2.5 font-medium">Stage</th>
-                  <th className="px-4 py-2.5 font-medium">Status</th>
-                  <th className="px-4 py-2.5 font-medium">AI</th>
-                  <th className="px-4 py-2.5 font-medium">Source</th>
-                  <th></th>
+                  <th className="px-3 sm:px-4 py-2.5 font-medium">Candidate</th>
+                  <th className="hidden md:table-cell px-4 py-2.5 font-medium">Role / Project</th>
+                  <th className="px-3 sm:px-4 py-2.5 font-medium">Stage</th>
+                  <th className="hidden sm:table-cell px-4 py-2.5 font-medium">Status</th>
+                  <th className="hidden sm:table-cell px-4 py-2.5 font-medium">AI</th>
+                  <th className="hidden lg:table-cell px-4 py-2.5 font-medium">Source</th>
+                  <th className="hidden sm:table-cell"></th>
                   {isAdmin && <th></th>}
                 </tr>
               </thead>
@@ -446,7 +446,7 @@ export default function CandidatesPage() {
                       selectedIds.has(c.id) ? 'bg-indigo-500/5' : ''
                     }`}
                   >
-                    <td className="pl-4 pr-2 py-2.5">
+                    <td className="pl-3 pr-2 py-2.5">
                       <input
                         type="checkbox"
                         className="w-4 h-4 accent-indigo-500"
@@ -454,20 +454,22 @@ export default function CandidatesPage() {
                         onChange={() => toggleSelected(c.id)}
                       />
                     </td>
-                    <td className="px-4 py-2.5">
-                      <Link to={`/candidates/${c.id}`} className="text-slate-100 font-medium hover:text-indigo-300">
+                    <td className="px-3 sm:px-4 py-2.5 min-w-0">
+                      <Link to={`/candidates/${c.id}`} className="text-slate-100 font-medium hover:text-indigo-300 block truncate">
                         {c.full_name || '(no name)'}
                       </Link>
-                      {c.email && <div className="text-[11px] text-slate-500 mt-0.5">{c.email}</div>}
+                      {c.email && <div className="text-[11px] text-slate-500 mt-0.5 truncate">{c.email}</div>}
+                      {/* On mobile (no Role/Project column), surface role inline */}
+                      <div className="md:hidden text-[11px] text-slate-500 mt-0.5 truncate">{c.role?.title}</div>
                     </td>
-                    <td className="px-4 py-2.5">
+                    <td className="hidden md:table-cell px-4 py-2.5">
                       <div className="text-slate-200">{c.role?.title || '-'}</div>
                       <div className="text-[11px] text-slate-500">{c.role?.project?.name}</div>
                     </td>
-                    <td className="px-4 py-2.5">
+                    <td className="px-3 sm:px-4 py-2.5">
                       <StageBadge stageKey={c.current_stage_key} state="in_progress" size="sm" />
                     </td>
-                    <td className="px-4 py-2.5">
+                    <td className="hidden sm:table-cell px-4 py-2.5">
                       <span className={
                         c.status === 'active' ? 'text-slate-300 text-xs' :
                         c.status === 'rejected' ? 'text-rose-300 text-xs' :
@@ -475,7 +477,7 @@ export default function CandidatesPage() {
                         'text-slate-400 text-xs'
                       }>{c.status}</span>
                     </td>
-                    <td className="px-4 py-2.5">
+                    <td className="hidden sm:table-cell px-4 py-2.5">
                       {typeof c.ai_score === 'number' ? (
                         <div className="flex items-center gap-2">
                           <span className="inline-flex items-center gap-1 text-amber-300 text-xs">
@@ -485,10 +487,10 @@ export default function CandidatesPage() {
                         </div>
                       ) : <span className="text-[11px] text-slate-500">-</span>}
                     </td>
-                    <td className="px-4 py-2.5">
+                    <td className="hidden lg:table-cell px-4 py-2.5">
                       <span className="text-[11px] text-slate-400 capitalize">{c.source}</span>
                     </td>
-                    <td className="px-4 py-2.5">
+                    <td className="hidden sm:table-cell px-4 py-2.5">
                       <Link to={`/candidates/${c.id}`} className="text-slate-500 hover:text-indigo-300">
                         <ArrowRight size={14} />
                       </Link>

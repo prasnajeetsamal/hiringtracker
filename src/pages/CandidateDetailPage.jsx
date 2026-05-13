@@ -284,7 +284,7 @@ export default function CandidateDetailPage() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 space-y-4">
+        <div className="lg:col-span-2 space-y-4 min-w-0">
           {/* AI evaluation - collapsible (collapsed by default once scored) */}
           <Card padding={false}>
             <div className="flex items-center justify-between px-5 py-3">
@@ -298,7 +298,7 @@ export default function CandidateDetailPage() {
                 <span className="font-medium">AI evaluation</span>
                 {ai && (
                   <>
-                    <span className="text-2xl font-bold text-slate-100 ml-2 tabular-nums">{ai.overallScore ?? '-'}</span>
+                    <span className="text-xl sm:text-2xl font-bold text-slate-100 ml-2 tabular-nums">{ai.overallScore ?? '-'}</span>
                     <span className="text-[10px] text-slate-500 mt-0.5">/100</span>
                     <RecommendationBadge value={ai.recommendation} />
                     <ChevronDown
@@ -342,9 +342,9 @@ export default function CandidateDetailPage() {
 
           {/* Pipeline timeline - current stage expanded, others collapsed */}
           <Card>
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
               <div className="text-slate-200 font-medium">Pipeline</div>
-              <div className="flex items-center gap-2 text-[11px] text-slate-500">
+              <div className="hidden sm:flex items-center gap-2 text-[11px] text-slate-500">
                 <span className="inline-flex items-center gap-1"><CircleDot size={10} className="text-indigo-300" />current</span>
                 <span className="inline-flex items-center gap-1"><Check size={10} className="text-emerald-300" />done</span>
                 <span className="inline-flex items-center gap-1"><Circle size={10} />upcoming</span>
@@ -430,7 +430,7 @@ export default function CandidateDetailPage() {
               <div className="text-[11px] text-slate-500 mb-2 leading-relaxed">
                 Share this link with the candidate so they can self-check their pipeline status. No Slate login required.
               </div>
-              <div className="flex gap-1.5">
+              <div className="flex flex-col sm:flex-row gap-1.5">
                 <input
                   readOnly
                   value={`${window.location.origin}/c/${candidate.public_token}`}
@@ -445,7 +445,7 @@ export default function CandidateDetailPage() {
                       () => toast.error('Copy failed'),
                     );
                   }}
-                  className="text-[11px] px-2.5 py-1.5 rounded-md text-slate-300 hover:text-slate-100 hover:bg-slate-800/60 border border-slate-700 inline-flex items-center gap-1 shrink-0"
+                  className="text-[11px] px-2.5 py-1.5 rounded-md text-slate-300 hover:text-slate-100 hover:bg-slate-800/60 border border-slate-700 inline-flex items-center justify-center gap-1 shrink-0"
                   title="Copy status link"
                 >
                   <Copy size={11} /> Copy
@@ -759,9 +759,9 @@ function FeedbackSection({ pipelineId, interviewerId, existing }) {
 function AIEvaluation({ ai }) {
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-3 flex-wrap">
+      <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
         <div className="flex items-center gap-2">
-          <span className="text-3xl font-bold text-slate-100">{ai.overallScore ?? '-'}</span>
+          <span className="text-2xl sm:text-3xl font-bold text-slate-100">{ai.overallScore ?? '-'}</span>
           <span className="text-xs text-slate-500">/ 100 overall</span>
         </div>
         <RecommendationBadge value={ai.recommendation} />
