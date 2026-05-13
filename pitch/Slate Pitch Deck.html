@@ -1,0 +1,1505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slate - Hiring, redesigned</title>
+
+<style>
+/* ═══════════════════════════════════════════════════════════
+   SLATE PITCH DECK
+   - Same deck-stage runtime as the Stats Engine deck.
+   - Palette swapped to Slate's indigo / violet / pink.
+   - Screenshots referenced via data-src; drop your real PNGs
+     into pitch/screens/ and they appear with no further edits.
+   ─────────────────────────────────────────────────────────── */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  /* Slate palette */
+  --indigo: #6366f1;
+  --indigo-2: #818cf8;
+  --violet: #a855f7;
+  --violet-2: #c084fc;
+  --pink:   #ec4899;
+  --pink-2: #f472b6;
+  --emerald:#10b981;
+  --emerald-2:#6ee7b7;
+  --amber:  #f59e0b;
+  --amber-2:#fcd34d;
+  --rose:   #f43f5e;
+  --rose-2: #fda4af;
+  --bg-0:   #050816;
+  --bg-1:   #0b1220;
+  --bg-2:   #141729;
+  --ink-0:  #ffffff;
+  --ink-1:  rgba(255,255,255,.82);
+  --ink-2:  rgba(255,255,255,.58);
+  --ink-3:  rgba(255,255,255,.34);
+  --ink-4:  rgba(255,255,255,.14);
+  --line:   rgba(255,255,255,.08);
+  --card:   rgba(255,255,255,.035);
+  --font:   "Inter", -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif;
+  --mono:   "JetBrains Mono", "SF Mono", ui-monospace, monospace;
+}
+
+html, body {
+  width: 100%; height: 100%; background: #000;
+  font-family: var(--font); color: var(--ink-0);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+deck-stage { background: #000; }
+
+/* ───────── SLIDE BASELINE ───────── */
+section.slide {
+  position: relative;
+  width: 1920px; height: 1080px;
+  overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-0);
+  font-family: var(--font);
+  color: var(--ink-0);
+}
+
+.slide-label {
+  position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px; font-weight: 600; letter-spacing: 3px; text-transform: uppercase;
+  color: var(--ink-2);
+  opacity: 0;
+}
+.slide-label .pip {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--indigo); box-shadow: 0 0 12px var(--indigo);
+}
+[data-deck-active] .slide-label {
+  animation: slideLabelIn .9s .15s cubic-bezier(.2,.7,.2,1) both;
+}
+@keyframes slideLabelIn {
+  from { opacity: 0; transform: translate(-50%, -14px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* ───────── ANIMATION PRIMITIVES ───────── */
+.anim-rise   { opacity: 0; transform: translateY(28px); }
+.anim-fall   { opacity: 0; transform: translateY(-22px); }
+.anim-left   { opacity: 0; transform: translateX(-40px); }
+.anim-right  { opacity: 0; transform: translateX(40px); }
+.anim-pop    { opacity: 0; transform: scale(.86); }
+.anim-fade   { opacity: 0; }
+.anim-rise-spring { opacity: 0; transform: translateY(34px) scale(.96); }
+
+[data-deck-active] .anim-rise        { animation: aRise   .85s var(--d,0s) cubic-bezier(.2,.75,.25,1) both; }
+[data-deck-active] .anim-fall        { animation: aFall   .85s var(--d,0s) cubic-bezier(.2,.75,.25,1) both; }
+[data-deck-active] .anim-left        { animation: aLeft   .9s  var(--d,0s) cubic-bezier(.2,.75,.25,1) both; }
+[data-deck-active] .anim-right       { animation: aRight  .9s  var(--d,0s) cubic-bezier(.2,.75,.25,1) both; }
+[data-deck-active] .anim-pop         { animation: aPop .8s var(--d,0s) cubic-bezier(.34,1.56,.64,1) both; }
+[data-deck-active] .anim-fade        { animation: aFade   1.1s var(--d,0s) ease both; }
+[data-deck-active] .anim-rise-spring { animation: aRiseSpring .9s var(--d,0s) cubic-bezier(.34,1.56,.64,1) both; }
+
+@keyframes aRise        { to { opacity: 1; transform: translateY(0); } }
+@keyframes aFall        { to { opacity: 1; transform: translateY(0); } }
+@keyframes aLeft        { to { opacity: 1; transform: translateX(0); } }
+@keyframes aRight       { to { opacity: 1; transform: translateX(0); } }
+@keyframes aPop         { to { opacity: 1; transform: scale(1); } }
+@keyframes aFade        { to { opacity: 1; } }
+@keyframes aRiseSpring  {
+  0%   { opacity: 0; transform: translateY(34px) scale(.96); }
+  60%  { opacity: 1; transform: translateY(-4px) scale(1.015); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.kinetic .w { display: inline-block; opacity: 0; transform: translateY(.6em); }
+[data-deck-active] .kinetic .w {
+  animation: wordIn .8s cubic-bezier(.2,.7,.2,1) both;
+  animation-delay: calc(var(--i, 0) * 80ms + var(--d, 100ms));
+}
+@keyframes wordIn {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.pulse-dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--emerald);
+  box-shadow: 0 0 0 0 rgba(16,185,129,.55);
+  animation: pulseDot 2s ease-in-out infinite;
+}
+@keyframes pulseDot {
+  0%   { box-shadow: 0 0 0 0 rgba(16,185,129,.55); }
+  60%  { box-shadow: 0 0 0 14px rgba(16,185,129,0); }
+  100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+}
+@keyframes pulseDotIndigo {
+  0%   { box-shadow: 0 0 0 0 rgba(99,102,241,.55); }
+  60%  { box-shadow: 0 0 0 16px rgba(99,102,241,0); }
+  100% { box-shadow: 0 0 0 0 rgba(99,102,241,0); }
+}
+
+[data-deck-active] .ico-draw path,
+[data-deck-active] .ico-draw circle,
+[data-deck-active] .ico-draw rect,
+[data-deck-active] .ico-draw line,
+[data-deck-active] .ico-draw polyline,
+[data-deck-active] .ico-draw polygon {
+  stroke-dasharray: 200; stroke-dashoffset: 200;
+  animation: drawIcon 1.2s var(--d,0.3s) cubic-bezier(.4,.2,.2,1) forwards;
+}
+@keyframes drawIcon { to { stroke-dashoffset: 0; } }
+
+.kenburn { animation: kenburn 18s ease-in-out infinite alternate; transform-origin: 50% 50%; }
+@keyframes kenburn {
+  from { transform: scale(1) translate(0,0); }
+  to   { transform: scale(1.045) translate(-12px, -6px); }
+}
+
+.float-orb {
+  position: absolute; border-radius: 50%; pointer-events: none;
+  filter: blur(60px); opacity: .45; mix-blend-mode: screen;
+  animation: orbDrift 16s ease-in-out infinite alternate;
+}
+@keyframes orbDrift {
+  from { transform: translate(0,0) scale(1); }
+  to   { transform: translate(40px,-28px) scale(1.08); }
+}
+
+.shimmer-fill {
+  background: linear-gradient(95deg,
+    #ffffff 0%, #d8cfff 30%, var(--violet-2) 50%, #d8cfff 70%, #ffffff 100%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;  background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+  animation: shimmerSlide 6s linear infinite;
+}
+@keyframes shimmerSlide {
+  0%   { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+.mesh-bg { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.mesh-bg::before {
+  content: ''; position: absolute; inset: -25%;
+  background:
+    radial-gradient(ellipse 50% 40% at 20% 30%, rgba(99,102,241,.30), transparent 60%),
+    radial-gradient(ellipse 40% 35% at 80% 70%, rgba(244,114,182,.20), transparent 60%);
+  animation: meshSpin 40s linear infinite;
+  transform-origin: 50% 50%;
+}
+@keyframes meshSpin { to { transform: rotate(360deg); } }
+
+.grid-faint {
+  position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+  background-size: 80px 80px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 50%, #000 35%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 50%, #000 35%, transparent 100%);
+}
+
+#auto-progress {
+  position: fixed; left: 0; top: 0; height: 3px; width: 0;
+  background: linear-gradient(90deg, var(--indigo), var(--violet), var(--pink));
+  box-shadow: 0 0 16px rgba(99,102,241,.65);
+  z-index: 9999;
+  transition: width .2s linear;
+}
+
+/* Browser chrome on screenshots */
+.win {
+  border-radius: 16px; overflow: hidden;
+  background: #111;
+  border: 1px solid var(--line);
+  box-shadow:
+    0 50px 120px rgba(0,0,0,.7),
+    0 30px 70px rgba(99,102,241,.10),
+    0 0 0 1px rgba(255,255,255,.06);
+  position: relative;
+}
+.win-chrome {
+  background: rgba(255,255,255,.04);
+  border-bottom: 1px solid var(--line);
+  padding: 10px 14px;
+  display: flex; align-items: center; gap: 6px;
+}
+.win-chrome .d { width: 12px; height: 12px; border-radius: 50%; }
+.win-chrome .url {
+  margin-left: 16px;
+  font: 500 11px/1 var(--mono);
+  color: var(--ink-3);
+  letter-spacing: .5px;
+}
+.win-body { position: relative; overflow: hidden; background: #0a0a0f; }
+.win-body img { display: block; width: 100%; height: auto; }
+
+/* Placeholder shown when the referenced screenshot file isn't present yet.
+   Disappears the moment a real image loads underneath it. */
+.win-body[data-empty]::after {
+  content: attr(data-empty);
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font: 600 13px/1.4 var(--mono); color: var(--ink-3);
+  letter-spacing: 1px; text-transform: uppercase;
+  background:
+    repeating-linear-gradient(45deg, rgba(99,102,241,.06) 0 14px, transparent 14px 28px),
+    linear-gradient(135deg, #1a1d2e, #0a0a0f);
+  text-align: center; padding: 0 40px;
+}
+.win-body img.kenburn { position: relative; z-index: 1; }
+
+.win-live {
+  position: absolute; top: 13px; right: 14px;
+  display: inline-flex; align-items: center; gap: 6px;
+  font: 700 9px/1 var(--mono); color: var(--emerald-2);
+  text-transform: uppercase; letter-spacing: 1.5px;
+  z-index: 4;
+}
+.win-live .pulse-dot { width: 7px; height: 7px; }
+
+.ico {
+  width: 1em; height: 1em; display: inline-block;
+  stroke: currentColor; stroke-width: 1.7;
+  stroke-linecap: round; stroke-linejoin: round;
+  fill: none; flex-shrink: 0;
+}
+
+/* ───────────────────────────────────────────────
+   SLIDE 1 - HERO
+   ─────────────────────────────────────────────── */
+#hero {
+  background:
+    radial-gradient(ellipse 60% 50% at 50% 45%, #18133a 0%, #05050f 65%),
+    var(--bg-0);
+}
+#hero .float-orb.a { width: 540px; height: 540px; background: var(--indigo); top: -80px; left: -60px; }
+#hero .float-orb.b { width: 480px; height: 480px; background: var(--pink); bottom: -100px; right: -40px; animation-duration: 22s; }
+
+#hero .hero-wrap {
+  position: relative; z-index: 4; text-align: center;
+  max-width: 1280px; padding: 0 80px;
+}
+#hero .hero-eye {
+  display: inline-flex; align-items: center; gap: 12px;
+  font-size: 13px; font-weight: 700; letter-spacing: 4px; text-transform: uppercase;
+  color: var(--ink-2);
+  padding: 9px 20px;
+  border: 1px solid var(--line);
+  border-radius: 100px;
+  background: rgba(255,255,255,.03);
+  backdrop-filter: blur(20px);
+  margin-bottom: 44px;
+}
+#hero .hero-eye .pulse-dot {
+  background: var(--indigo);
+  animation: pulseDotIndigo 2s ease-in-out infinite;
+}
+
+#hero .hero-title {
+  font-size: 240px; font-weight: 800; letter-spacing: -8px; line-height: .9;
+  margin-bottom: 44px;
+}
+#hero .hero-title .slate {
+  background: linear-gradient(95deg, #fff 0%, var(--indigo-2) 35%, var(--violet-2) 55%, var(--pink-2) 80%, #fff 100%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation:
+    wordIn .8s .3s cubic-bezier(.2,.7,.2,1) both,
+    shimmerSlide 6s linear infinite;
+}
+
+#hero .hero-tag {
+  font-size: 44px; font-weight: 300; letter-spacing: -1px;
+  color: var(--ink-1); margin-bottom: 56px;
+}
+#hero .hero-tag em { font-style: normal; color: #fff; font-weight: 500; }
+
+#hero .hero-meta {
+  display: inline-flex; gap: 56px; justify-content: center;
+  padding: 22px 42px;
+  border: 1px solid var(--line);
+  border-radius: 100px;
+  background: rgba(255,255,255,.025);
+  backdrop-filter: blur(20px);
+}
+#hero .hero-meta .item { text-align: center; }
+#hero .hero-meta .n {
+  display: block;
+  font: 700 36px/1 var(--font); letter-spacing: -1px;
+  background: linear-gradient(180deg, #fff, #a08bd8);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+#hero .hero-meta .l {
+  font-size: 11px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--ink-3); margin-top: 6px;
+}
+#hero .hero-meta .div { width: 1px; align-self: stretch; background: var(--line); }
+
+#hero::after {
+  content: ''; position: absolute; left: 0; right: 0; top: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(99,102,241,.6), transparent);
+  animation: scanSweep 5s ease-in-out infinite;
+}
+@keyframes scanSweep {
+  0%   { top: 0%;   opacity: 0; }
+  20%  { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+
+/* ───────────────────────────────────────────────
+   SLIDE 2 - PITCH
+   ─────────────────────────────────────────────── */
+#pitch { background: linear-gradient(135deg, #07061a 0%, #06070d 50%, #170919 100%); }
+#pitch .grid-faint { opacity: .6; }
+
+.pitch-wrap {
+  position: relative; z-index: 2;
+  width: 100%; max-width: 1720px;
+  padding: 0 80px;
+  display: grid; grid-template-columns: 1fr 1.6fr; gap: 80px;
+  align-items: center;
+}
+.pitch-h1 {
+  font-size: 72px; font-weight: 700; letter-spacing: -2.5px; line-height: 1.05;
+  margin-bottom: 28px; color: #fff;
+}
+.pitch-h1 .grad {
+  background: linear-gradient(120deg, var(--indigo-2), var(--violet-2), var(--pink-2));
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.pitch-sub {
+  font-size: 22px; font-weight: 300; line-height: 1.55;
+  color: var(--ink-1); margin-bottom: 48px;
+}
+.pillar-row { display: flex; flex-direction: column; gap: 14px; }
+.pillar {
+  display: flex; align-items: center; gap: 18px;
+  padding: 20px 22px; border-radius: 16px;
+  background: var(--card); border: 1px solid var(--line);
+  position: relative; overflow: hidden;
+}
+.pillar .pi {
+  width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(99,102,241,.12);
+  color: var(--indigo-2);
+  font-size: 22px;
+}
+.pillar .pt { font-size: 17px; font-weight: 600; color: #fff; margin-bottom: 4px; }
+.pillar .pd { font-size: 13px; color: var(--ink-2); line-height: 1.45; }
+
+.pitch-shot { position: relative; }
+.pitch-shot .win { transform: perspective(2400px) rotateY(-4deg); transform-origin: left center; }
+
+/* ───────────────────────────────────────────────
+   SLIDE 3 - FEATURES
+   ─────────────────────────────────────────────── */
+#features { background: radial-gradient(ellipse 100% 80% at 50% 35%, #131032 0%, #06070d 70%); }
+
+.feat-wrap { position: relative; z-index: 2; max-width: 1500px; padding: 0 80px; text-align: center; }
+.feat-title {
+  font-size: 80px; font-weight: 700; letter-spacing: -2.5px; line-height: 1.05;
+  margin-bottom: 22px;
+}
+.feat-title .grad {
+  background: linear-gradient(120deg, var(--indigo-2), var(--violet-2), var(--pink-2));
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.feat-sub { font-size: 22px; color: var(--ink-2); margin-bottom: 70px; }
+.feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+.feat-card {
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 44px 32px 36px;
+  text-align: left;
+  overflow: hidden;
+  min-height: 280px;
+  display: flex; flex-direction: column; justify-content: space-between;
+}
+.feat-card .num {
+  font: 700 11px/1 var(--mono); letter-spacing: 2px;
+  color: var(--indigo-2); margin-bottom: 18px;
+}
+.feat-card .ic {
+  width: 72px; height: 72px; border-radius: 18px;
+  background: rgba(99,102,241,.12);
+  color: var(--indigo-2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 34px;
+  margin-bottom: 28px;
+  border: 1px solid rgba(99,102,241,.22);
+}
+.feat-card .nm {
+  font-size: 24px; font-weight: 600; color: #fff;
+  letter-spacing: -.3px; line-height: 1.25;
+  margin-bottom: 8px;
+}
+.feat-card .dsc {
+  font-size: 15px; font-weight: 400; color: var(--ink-2);
+  line-height: 1.45; letter-spacing: -.1px;
+}
+.feat-card .ar {
+  position: absolute; top: 32px; right: 32px;
+  font-size: 22px;
+  color: var(--ink-3);
+  transition: transform .4s, color .4s;
+}
+[data-deck-active] .feat-card .ar {
+  animation: arrowNudge 2.4s var(--d, 1s) ease-in-out infinite;
+}
+@keyframes arrowNudge {
+  0%, 100% { transform: translate(0, 0); }
+  50%      { transform: translate(4px, -4px); }
+}
+/* Accent variants per card so the grid feels colourful */
+.feat-card.v .ic { background: rgba(168,85,247,.12); color: var(--violet-2); border-color: rgba(168,85,247,.22); }
+.feat-card.v .num { color: var(--violet-2); }
+.feat-card.p .ic { background: rgba(236,72,153,.12); color: var(--pink-2); border-color: rgba(236,72,153,.22); }
+.feat-card.p .num { color: var(--pink-2); }
+.feat-card.e .ic { background: rgba(16,185,129,.12); color: var(--emerald-2); border-color: rgba(16,185,129,.22); }
+.feat-card.e .num { color: var(--emerald-2); }
+.feat-card.a .ic { background: rgba(245,158,11,.12); color: var(--amber-2); border-color: rgba(245,158,11,.22); }
+.feat-card.a .num { color: var(--amber-2); }
+
+/* ───────────────────────────────────────────────
+   SLIDES 4/5/6/7 - SPLIT LAYOUTS
+   ─────────────────────────────────────────────── */
+.split-wrap {
+  position: relative; z-index: 2;
+  width: 100%; max-width: 1720px; padding: 0 80px;
+  display: grid; grid-template-columns: 1fr 1.8fr; gap: 80px;
+  align-items: center;
+}
+.split-eye {
+  font: 700 13px/1 var(--mono); letter-spacing: 3px; text-transform: uppercase;
+  color: var(--indigo-2); margin-bottom: 22px;
+}
+.split-h1 {
+  font-size: 64px; font-weight: 700; letter-spacing: -2px; line-height: 1.05;
+  margin-bottom: 26px;
+}
+.split-h1 .grad {
+  background: linear-gradient(120deg, var(--indigo-2), var(--violet-2));
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.split-sub {
+  font-size: 19px; line-height: 1.6; color: var(--ink-1);
+  margin-bottom: 38px;
+}
+.kpi-row { display: flex; flex-direction: column; gap: 12px; }
+.kpi {
+  display: flex; align-items: flex-start; gap: 18px;
+  padding: 18px 22px; border-radius: 16px;
+  background: var(--card); border: 1px solid var(--line);
+}
+.kpi .ki {
+  width: 42px; height: 42px; border-radius: 11px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+}
+.kpi .kn { font-size: 17px; font-weight: 600; color: #fff; margin-bottom: 5px; letter-spacing: -.2px; }
+.kpi .kd { font-size: 13px; color: var(--ink-2); line-height: 1.5; }
+
+.kpi.b .ki { background: rgba(99,102,241,.13);  color: var(--indigo-2); }
+.kpi.v .ki { background: rgba(168,85,247,.13);  color: var(--violet-2); }
+.kpi.p .ki { background: rgba(236,72,153,.13);  color: var(--pink-2); }
+.kpi.e .ki { background: rgba(16,185,129,.13);  color: var(--emerald-2); }
+.kpi.a .ki { background: rgba(245,158,11,.13);  color: var(--amber-2); }
+
+.split-shot { position: relative; }
+
+/* Slide 4 - Pipeline (indigo) */
+#pipeline { background: radial-gradient(ellipse 110% 90% at 50% 50%, #0f1330 0%, #06070d 70%); }
+#pipeline .float-orb.a { width: 420px; height: 420px; background: var(--indigo); bottom: -40px; left: -30px; }
+
+/* Slide 5 - AI (violet) */
+#ai { background: linear-gradient(135deg, #0c0617 0%, #06070d 55%, #1d0830 100%); }
+#ai .float-orb.a { width: 460px; height: 460px; background: var(--violet); top: -80px; right: 6%; }
+#ai .split-eye { color: var(--violet-2); }
+#ai .split-h1 .grad {
+  background: linear-gradient(120deg, var(--violet-2), var(--pink-2));
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.ai-ticker {
+  position: absolute; top: 24px; right: -36px;
+  background: rgba(168,85,247,.12);
+  border: 1px solid rgba(168,85,247,.35);
+  border-radius: 18px; padding: 16px 22px;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 24px 60px rgba(168,85,247,.25);
+  z-index: 5;
+}
+.ai-ticker .t-lab { font: 700 10px/1 var(--mono); letter-spacing: 2px; color: var(--violet-2); margin-bottom: 6px; text-transform: uppercase; }
+.ai-ticker .t-val { font-size: 36px; font-weight: 700; color: #fff; letter-spacing: -1px; }
+.ai-ticker .t-val .x { color: var(--violet-2); }
+
+/* Slide 6 - Reports (emerald) */
+#reports { background: linear-gradient(135deg, #061d10 0%, #06070d 55%, #061b1b 100%); }
+#reports .float-orb.a { width: 440px; height: 440px; background: var(--emerald); top: 10%; right: -60px; }
+#reports .split-eye { color: var(--emerald-2); }
+#reports .split-h1 .grad {
+  background: linear-gradient(120deg, var(--emerald-2), var(--indigo-2));
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.sig-pop {
+  position: absolute; top: -32px; right: -28px;
+  background: rgba(16,185,129,.16);
+  border: 1px solid rgba(16,185,129,.45);
+  border-radius: 16px; padding: 14px 22px;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 24px 60px rgba(16,185,129,.28);
+  z-index: 5;
+}
+.sig-pop .sp-lab {
+  display: flex; align-items: center; gap: 8px;
+  font: 700 10px/1 var(--mono); letter-spacing: 2px;
+  color: var(--emerald-2); text-transform: uppercase; margin-bottom: 8px;
+}
+.sig-pop .sp-val { font-size: 26px; font-weight: 700; color: #fff; letter-spacing: -.5px; }
+#reports .win-live { display: none; }
+
+/* Slide 7 - Candidate experience (pink) */
+#candidate { background: linear-gradient(135deg, #1f0918 0%, #06070d 55%, #0a0517 100%); }
+#candidate .float-orb.a { width: 460px; height: 460px; background: var(--pink); top: -60px; right: -40px; }
+#candidate .split-eye { color: var(--pink-2); }
+#candidate .split-h1 .grad {
+  background: linear-gradient(120deg, var(--pink-2), var(--violet-2));
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.cand-ticker {
+  position: absolute; bottom: -28px; left: -28px;
+  background: rgba(236,72,153,.12);
+  border: 1px solid rgba(236,72,153,.45);
+  border-radius: 16px; padding: 14px 22px;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 24px 60px rgba(236,72,153,.28);
+  z-index: 5;
+}
+.cand-ticker .t-lab {
+  display: flex; align-items: center; gap: 8px;
+  font: 700 10px/1 var(--mono); letter-spacing: 2px;
+  color: var(--pink-2); text-transform: uppercase; margin-bottom: 8px;
+}
+.cand-ticker .t-lab .pulse-dot { background: var(--pink); box-shadow: 0 0 0 0 rgba(236,72,153,.55); }
+.cand-ticker .t-val { font-size: 22px; font-weight: 700; color: #fff; letter-spacing: -.3px; }
+.cand-ticker .t-sub { font-size: 11px; color: var(--ink-2); margin-top: 4px; }
+
+/* ───────────────────────────────────────────────
+   SLIDE 8 - CTA
+   ─────────────────────────────────────────────── */
+#cta {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 40%, #1a1342 0%, #06070d 60%),
+    var(--bg-0);
+}
+#cta .float-orb.a { width: 600px; height: 600px; background: var(--indigo); top: -120px; left: -100px; }
+#cta .float-orb.b { width: 480px; height: 480px; background: var(--pink); bottom: -120px; right: -80px; animation-duration: 22s; }
+
+.cta-wrap {
+  position: relative; z-index: 4; text-align: center;
+  max-width: 1280px; padding: 0 80px;
+}
+.cta-logo {
+  width: 108px; height: 108px; border-radius: 28px; margin: 0 auto 32px;
+  background: linear-gradient(135deg, var(--indigo), var(--violet), var(--pink));
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 24px 60px rgba(99,102,241,.5);
+  position: relative;
+}
+.cta-logo::before {
+  content: ''; position: absolute; inset: -4px; border-radius: inherit;
+  background: linear-gradient(135deg, var(--indigo), var(--violet), var(--pink));
+  filter: blur(20px); opacity: .5; z-index: -1;
+}
+.cta-eye {
+  display: inline-flex; align-items: center; gap: 12px;
+  font: 700 13px/1 var(--mono); letter-spacing: 3px; text-transform: uppercase;
+  color: var(--indigo-2); margin-bottom: 28px;
+}
+.cta-eye .pulse-dot { background: var(--indigo); animation: pulseDotIndigo 2s infinite; }
+.cta-h1 {
+  font-size: 130px; font-weight: 800; letter-spacing: -4px; line-height: 1.0;
+  margin-bottom: 28px;
+}
+.cta-h1 .grad {
+  background: linear-gradient(95deg, #fff 0%, var(--violet-2) 50%, var(--pink-2) 100%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  animation: shimmerSlide 6s linear infinite;
+}
+.cta-sub {
+  font-size: 26px; font-weight: 300; color: var(--ink-1); line-height: 1.5;
+  margin-bottom: 56px;
+}
+.cta-row {
+  display: inline-flex; gap: 14px; align-items: center;
+  padding: 8px 8px 8px 22px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid var(--line);
+  border-radius: 100px;
+  backdrop-filter: blur(20px);
+  margin-bottom: 40px;
+}
+.cta-row .url {
+  font: 600 22px/1 var(--mono);
+  color: #fff; letter-spacing: -.3px;
+}
+.cta-row .url .at { color: var(--indigo-2); }
+.cta-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 14px 28px; border-radius: 100px;
+  background: linear-gradient(95deg, var(--indigo), var(--violet));
+  color: #fff;
+  font-size: 15px; font-weight: 700;
+  letter-spacing: .2px;
+  box-shadow: 0 12px 28px rgba(99,102,241,.45);
+}
+.cta-tags { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.cta-tag {
+  padding: 8px 16px; border-radius: 100px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid var(--line);
+  font-size: 12px; font-weight: 600; color: var(--ink-2);
+  letter-spacing: .5px;
+}
+
+/* ───────── TWEAKS PANEL ───────── */
+#tweaks-toggle {
+  position: fixed; bottom: 24px; right: 24px; z-index: 9998;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: rgba(20,23,41,.85);
+  border: 1px solid var(--line);
+  color: var(--ink-1);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(20px);
+  font-size: 18px;
+}
+#tweaks-toggle:hover { background: rgba(20,23,41,.95); color: #fff; }
+#tweaks-panel {
+  position: fixed; bottom: 84px; right: 24px; z-index: 9998;
+  width: 280px;
+  background: rgba(10,12,22,.92);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 18px;
+  backdrop-filter: blur(24px);
+  color: #fff;
+  font-family: var(--font);
+  transform: translateY(10px) scale(.96);
+  opacity: 0; pointer-events: none;
+  transition: all .25s cubic-bezier(.2,.7,.2,1);
+}
+#tweaks-panel.open { transform: translateY(0) scale(1); opacity: 1; pointer-events: auto; }
+#tweaks-panel h4 { font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--ink-3); margin-bottom: 12px; }
+#tweaks-panel .row { margin-bottom: 14px; }
+#tweaks-panel label { display: block; font-size: 11px; color: var(--ink-3); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 8px; }
+#tweaks-panel .seg {
+  display: flex; gap: 4px; padding: 3px; border-radius: 10px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid var(--line);
+}
+#tweaks-panel .seg button {
+  flex: 1; padding: 8px 4px; border: none; background: transparent;
+  color: var(--ink-2); font-size: 12px; font-weight: 600; cursor: pointer;
+  border-radius: 7px;
+  transition: all .15s;
+}
+#tweaks-panel .seg button:hover { color: #fff; }
+#tweaks-panel .seg button.on {
+  background: linear-gradient(95deg, var(--indigo), var(--violet)); color: #fff;
+  box-shadow: 0 4px 14px rgba(99,102,241,.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+  .kenburn, .float-orb, .mesh-bg::before, .shimmer-fill, #hero::after { animation: none !important; }
+}
+body.motion-min .float-orb,
+body.motion-min .mesh-bg::before,
+body.motion-min #hero::after,
+body.motion-min .kenburn { animation: none !important; }
+body.motion-min .shimmer-fill,
+body.motion-min #hero .hero-title .slate,
+body.motion-min .cta-h1 .grad { animation: none !important; background: linear-gradient(95deg, #fff, var(--violet-2)) !important; -webkit-background-clip: text !important; background-clip: text !important; }
+body.motion-max .float-orb { opacity: .65; }
+body.motion-max .kenburn { animation-duration: 12s; }
+</style>
+</head>
+<body>
+
+<div id="auto-progress"></div>
+
+<deck-stage width="1920" height="1080" no-rail>
+
+  <!-- ═══════════════ SLIDE 1 - HERO ═══════════════ -->
+  <section class="slide" id="hero" data-screen-label="01 Hero">
+    <div class="mesh-bg"></div>
+    <div class="float-orb a"></div>
+    <div class="float-orb b"></div>
+
+    <div class="hero-wrap">
+      <div class="hero-eye anim-rise" style="--d:.4s">
+        <span class="pulse-dot"></span> Now Live
+      </div>
+
+      <h1 class="hero-title">
+        <span class="slate">Slate</span>
+      </h1>
+
+      <p class="hero-tag anim-rise" style="--d:1.0s">
+        Hiring, <em>redesigned</em>. From application to offer, <em>in one place</em>.
+      </p>
+
+      <div class="hero-meta anim-rise" style="--d:1.3s">
+        <div class="item">
+          <span class="n" data-count="9">0</span>
+          <div class="l">Pipeline Stages</div>
+        </div>
+        <div class="div"></div>
+        <div class="item">
+          <span class="n" data-count="14">0</span>
+          <div class="l">AI-Powered Tools</div>
+        </div>
+        <div class="div"></div>
+        <div class="item">
+          <span class="n" data-count="1">0</span>
+          <div class="l">Source of Truth</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ SLIDE 2 - PITCH ═══════════════ -->
+  <section class="slide" id="pitch" data-screen-label="02 Pitch">
+    <div class="grid-faint"></div>
+    <div class="float-orb a" style="width:380px;height:380px;background:var(--indigo);top:-50px;left:-30px;"></div>
+    <div class="slide-label"><span class="pip"></span> What is Slate</div>
+
+    <div class="pitch-wrap">
+      <div>
+        <h2 class="pitch-h1 kinetic" style="--d:.3s">
+          <span class="w" style="--i:0">Every</span>
+          <span class="w" style="--i:1">hire.</span><br>
+          <span class="w grad" style="--i:2">One</span>
+          <span class="w grad" style="--i:3">platform.</span>
+        </h2>
+        <p class="pitch-sub anim-rise" style="--d:1.2s">
+          Replace Workday plus your scattered spreadsheets with a single, beautifully designed hiring workspace. Production-grade, AI-native, built for internal teams.
+        </p>
+
+        <div class="pillar-row">
+          <div class="pillar anim-left" style="--d:1.45s">
+            <div class="pi">
+              <svg class="ico ico-draw" viewBox="0 0 24 24">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <path d="M3 9h18M9 3v18"/>
+              </svg>
+            </div>
+            <div>
+              <div class="pt">Unified Workspace</div>
+              <div class="pd">Projects, roles, candidates, feedback, calendars - one app.</div>
+            </div>
+          </div>
+          <div class="pillar anim-left" style="--d:1.6s">
+            <div class="pi">
+              <svg class="ico ico-draw" viewBox="0 0 24 24">
+                <path d="M12 2l2.4 4.8 5.6.8-4 3.9.9 5.5L12 14.4l-4.9 2.6.9-5.5L4 7.6l5.6-.8z"/>
+              </svg>
+            </div>
+            <div>
+              <div class="pt">AI Throughout</div>
+              <div class="pd">Resume scoring, semantic search, JD drafting, an in-app assistant that knows your data.</div>
+            </div>
+          </div>
+          <div class="pillar anim-left" style="--d:1.75s">
+            <div class="pi">
+              <svg class="ico ico-draw" viewBox="0 0 24 24">
+                <circle cx="9" cy="7" r="3"/>
+                <path d="M3 21v-1a6 6 0 0 1 12 0v1"/>
+                <path d="M16 11h6M19 8v6"/>
+              </svg>
+            </div>
+            <div>
+              <div class="pt">Built for Teams</div>
+              <div class="pd">RLS-scoped data, @mentions, stage-scoped comments, scheduled report delivery.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pitch-shot anim-right" style="--d:.9s">
+        <div class="win">
+          <div class="win-chrome">
+            <div class="d" style="background:#ff5f57"></div>
+            <div class="d" style="background:#febc2e"></div>
+            <div class="d" style="background:#28c840"></div>
+            <div class="url">trackerhiring.vercel.app / dashboard</div>
+          </div>
+          <div class="win-live"><span class="pulse-dot"></span> Live</div>
+          <div class="win-body" data-empty="Drop screens/dashboard.png">
+            <img class="kenburn" data-src="screens/dashboard.png" alt="Slate dashboard">
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ SLIDE 3 - FEATURES ═══════════════ -->
+  <section class="slide" id="features" data-screen-label="03 Features">
+    <div class="grid-faint"></div>
+    <div class="float-orb a" style="width:380px;height:380px;background:var(--violet);top:-40px;left:30%;"></div>
+
+    <div class="feat-wrap">
+      <h2 class="feat-title kinetic" style="--d:.2s">
+        <span class="w" style="--i:0">Every</span>
+        <span class="w" style="--i:1">tool</span>
+        <span class="w grad" style="--i:2">a</span>
+        <span class="w grad" style="--i:3">recruiter</span>
+        <span class="w grad" style="--i:4">needs.</span>
+      </h2>
+      <p class="feat-sub anim-rise" style="--d:.9s">From application to offer letter, nothing leaves the platform.</p>
+
+      <div class="feat-grid">
+        <div class="feat-card anim-rise-spring" style="--d:1.05s">
+          <div>
+            <div class="num">01</div>
+            <div class="ic">
+              <svg class="ico ico-draw" viewBox="0 0 24 24">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <path d="M3 9h18M9 3v18"/>
+              </svg>
+            </div>
+            <div class="nm">9-Stage Pipeline</div>
+            <div class="dsc">Configurable per role. Atomic stage transitions. Per-stage feedback + comments.</div>
+          </div>
+          <span class="ar">→</span>
+        </div>
+        <div class="feat-card v anim-rise-spring" style="--d:1.18s">
+          <div>
+            <div class="num">02</div>
+            <div class="ic">
+              <svg class="ico ico-draw" viewBox="0 0 24 24">
+                <path d="M12 2l2.4 4.8 5.6.8-4 3.9.9 5.5L12 14.4l-4.9 2.6.9-5.5L4 7.6l5.6-.8z"/>
+              </svg>
+            </div>
+            <div class="nm">AI Resume Scoring</div>
+            <div class="dsc">Claude evaluates each candidate against the JD with extended-thinking + a safety net for must-haves.</div>
+          </div>
+          <span class="ar" style="--d:1.4s">→</span>
+        </div>
+        <div class="feat-card p anim-rise-spring" style="--d:1.31s">
+          <div>
+            <div class="num">03</div>
+            <div class="ic">
+              <svg class="ico ico-draw" viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="7"/>
+                <path d="M21 21l-4.3-4.3"/>
+              </svg>
+            </div>
+            <div class="nm">Semantic Search</div>
+            <div class="dsc">"Senior PMs with marketplace experience" returns ranked matches across your whole pool.</div>
+          </div>
+          <span class="ar" style="--d:1.55s">→</span>
+        </div>
+        <div class="feat-card e anim-rise-spring" style="--d:1.44s">
+          <div>
+            <div class="num">04</div>
+            <div class="ic">
+              <svg class="ico ico-draw" viewBox="0 0 24 24">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <path d="M9 12l1.5 1.5L14 10"/>
+              </svg>
+            </div>
+            <div class="nm">AI-Drafted JDs</div>
+            <div class="dsc">Describe the role in plain English. Get a structured JD ready to edit in seconds.</div>
+          </div>
+          <span class="ar" style="--d:1.7s">→</span>
+        </div>
+        <div class="feat-card a anim-rise-spring" style="--d:1.57s">
+          <div>
+            <div class="num">05</div>
+            <div class="ic">
+              <svg class="ico ico-draw" viewBox="0 0 24 24">
+                <path d="M3 3v18h18"/>
+                <path d="M7 14l4-4 4 4 6-7"/>
+              </svg>
+            </div>
+            <div class="nm">Reports + Heatmap</div>
+            <div class="dsc">Pixel-perfect PDF / HTML exports. 60-day activity strip. Scheduled delivery to recipients.</div>
+          </div>
+          <span class="ar" style="--d:1.85s">→</span>
+        </div>
+        <div class="feat-card p anim-rise-spring" style="--d:1.70s">
+          <div>
+            <div class="num">06</div>
+            <div class="ic">
+              <svg class="ico ico-draw" viewBox="0 0 24 24">
+                <circle cx="12" cy="8" r="4"/>
+                <path d="M4 21a8 8 0 0 1 16 0"/>
+              </svg>
+            </div>
+            <div class="nm">Candidate Status Page</div>
+            <div class="dsc">Tokenised public URL. Candidates self-check where they are. Zero "any update?" emails.</div>
+          </div>
+          <span class="ar" style="--d:2s">→</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ SLIDE 4 - PIPELINE ═══════════════ -->
+  <section class="slide" id="pipeline" data-screen-label="04 Pipeline">
+    <div class="grid-faint"></div>
+    <div class="float-orb a"></div>
+    <div class="slide-label"><span class="pip"></span> Pipeline + Collaboration</div>
+
+    <div class="split-wrap">
+      <div>
+        <div class="split-eye anim-rise" style="--d:.2s">01 - Every candidate, one timeline</div>
+        <h2 class="split-h1 kinetic" style="--d:.4s">
+          <span class="w" style="--i:0">A</span>
+          <span class="w" style="--i:1">pipeline</span>
+          <span class="w grad" style="--i:2">that</span>
+          <span class="w grad" style="--i:3">collaborates.</span>
+        </h2>
+        <p class="split-sub anim-rise" style="--d:1.1s">
+          Nine stages. Configurable per role. Stage-scoped discussion threads. Per-stage interviewer feedback with keyboard shortcuts and draft auto-save.
+        </p>
+        <div class="kpi-row">
+          <div class="kpi b anim-left" style="--d:1.35s">
+            <div class="ki">
+              <svg class="ico ico-draw" viewBox="0 0 24 24">
+                <path d="M3 12h4M9 12h6M17 12h4"/>
+                <circle cx="7" cy="12" r="2"/>
+                <circle cx="17" cy="12" r="2"/>
+              </svg>
+            </div>
+            <div>
+              <div class="kn">Atomic Transitions</div>
+              <div class="kd">Advance / reject / skip are one server hop. No half-flipped pipelines.</div>
+            </div>
+          </div>
+          <div class="kpi v anim-left" style="--d:1.5s">
+            <div class="ki">
+              <svg class="ico ico-draw" viewBox="0 0 24 24">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+            </div>
+            <div>
+              <div class="kn">@-Mentions + Threads</div>
+              <div class="kd">Tag teammates inside any stage. Email delivered the moment they're mentioned.</div>
+            </div>
+          </div>
+          <div class="kpi e anim-left" style="--d:1.65s">
+            <div class="ki">
+              <svg class="ico ico-draw" viewBox="0 0 24 24">
+                <path d="M9 11l3 3L22 4"/>
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+              </svg>
+            </div>
+            <div>
+              <div class="kn">Feedback That Sticks</div>
+              <div class="kd">Auto-saved drafts. Keyboard shortcuts (S / H / N / X, 1 - 5). Submitted state collapses to a clean summary.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="split-shot anim-right" style="--d:.6s">
+        <div class="win">
+          <div class="win-chrome">
+            <div class="d" style="background:#ff5f57"></div>
+            <div class="d" style="background:#febc2e"></div>
+            <div class="d" style="background:#28c840"></div>
+            <div class="url">trackerhiring.vercel.app / candidates / candidate</div>
+          </div>
+          <div class="win-live"><span class="pulse-dot"></span> Live</div>
+          <div class="win-body" data-empty="Drop screens/candidate-detail.png">
+            <img class="kenburn" data-src="screens/candidate-detail.png" alt="Candidate detail with pipeline">
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ SLIDE 5 - AI ═══════════════ -->
+  <section class="slide" id="ai" data-screen-label="05 AI">
+    <div class="grid-faint"></div>
+    <div class="float-orb a"></div>
+    <div class="slide-label">
+      <span class="pip" style="background:var(--violet);box-shadow:0 0 12px var(--violet)"></span>
+      AI Throughout
+    </div>
+
+    <div class="split-wrap">
+      <div>
+        <div class="split-eye anim-rise" style="--d:.2s">02 - Claude, native</div>
+        <h2 class="split-h1 kinetic" style="--d:.4s">
+          <span class="w" style="--i:0">Read</span>
+          <span class="w" style="--i:1">your</span>
+          <span class="w grad" style="--i:2">data.</span>
+          <span class="w grad" style="--i:3">Score</span>
+          <span class="w grad" style="--i:4">your</span>
+          <span class="w grad" style="--i:5">candidates.</span>
+        </h2>
+        <p class="split-sub anim-rise" style="--d:1.2s">
+          Claude Sonnet 4.5 with extended thinking, wired into every workflow that matters - and walled off by RLS so it only sees what the caller can see.
+        </p>
+        <div class="kpi-row">
+          <div class="kpi v anim-left" style="--d:1.45s">
+            <div class="ki">
+              <svg class="ico ico-draw" viewBox="0 0 24 24">
+                <polygon points="12 2 15 8.5 22 9.3 17 14 18.2 21 12 17.8 5.8 21 7 14 2 9.3 9 8.5"/>
+              </svg>
+            </div>
+            <div>
+              <div class="kn">Resume Scoring</div>
+              <div class="kd">Per-JD evaluation with a safety net: must-have misses cap the score, level + location are calibrated.</div>
+            </div>
+          </div>
+          <div class="kpi v anim-left" style="--d:1.6s">
+            <div class="ki">
+              <svg class="ico ico-draw" viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="7"/>
+                <path d="M21 21l-4.3-4.3"/>
+              </svg>
+            </div>
+            <div>
+              <div class="kn">Semantic Search</div>
+              <div class="kd">Natural language over the full candidate pool. RLS-scoped. Ranked matches with reasons.</div>
+            </div>
+          </div>
+          <div class="kpi v anim-left" style="--d:1.75s">
+            <div class="ki">
+              <svg class="ico ico-draw" viewBox="0 0 24 24">
+                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+              </svg>
+            </div>
+            <div>
+              <div class="kn">In-App Assistant</div>
+              <div class="kd">"Whose feedback is overdue?" "Show me strong-hires this month." Seven tools, full schema coverage.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="split-shot anim-right" style="--d:.6s">
+        <div class="win">
+          <div class="win-chrome">
+            <div class="d" style="background:#ff5f57"></div>
+            <div class="d" style="background:#febc2e"></div>
+            <div class="d" style="background:#28c840"></div>
+            <div class="url">trackerhiring.vercel.app / candidates - smart search</div>
+          </div>
+          <div class="win-live"><span class="pulse-dot"></span> Live</div>
+          <div class="win-body" data-empty="Drop screens/semantic-search.png">
+            <img class="kenburn" data-src="screens/semantic-search.png" alt="Semantic search dialog">
+          </div>
+        </div>
+        <div class="ai-ticker anim-pop" style="--d:1.8s">
+          <div class="t-lab">AI Score</div>
+          <div class="t-val"><span data-count="92">0</span><span class="x"> / 100</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ SLIDE 6 - REPORTS ═══════════════ -->
+  <section class="slide" id="reports" data-screen-label="06 Reports">
+    <div class="grid-faint"></div>
+    <div class="float-orb a"></div>
+    <div class="slide-label">
+      <span class="pip" style="background:var(--emerald);box-shadow:0 0 12px var(--emerald)"></span>
+      Reports + Insights
+    </div>
+
+    <div class="split-wrap">
+      <div>
+        <div class="split-eye anim-rise" style="--d:.2s">03 - From data to decision</div>
+        <h2 class="split-h1 kinetic" style="--d:.4s">
+          <span class="w" style="--i:0">Beautiful</span>
+          <span class="w grad" style="--i:1">numbers,</span>
+          <span class="w grad" style="--i:2">on</span>
+          <span class="w grad" style="--i:3">a</span>
+          <span class="w grad" style="--i:4">schedule.</span>
+        </h2>
+        <p class="split-sub anim-rise" style="--d:1.0s">
+          Activity heatmaps, conversion rates, time-to-hire, source breakdown - all filterable by project + role. Export as pixel-perfect PDF or self-contained HTML. Or have them mailed to your team weekly.
+        </p>
+        <div class="kpi-row">
+          <div class="kpi e anim-left" style="--d:1.25s">
+            <div class="ki">
+              <svg class="ico ico-draw" viewBox="0 0 24 24">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>
+              </svg>
+            </div>
+            <div>
+              <div class="kn">Activity Heatmap</div>
+              <div class="kd">60-day daily strip - added, advanced, rejected. Trends visible at a glance.</div>
+            </div>
+          </div>
+          <div class="kpi e anim-left" style="--d:1.4s">
+            <div class="ki">
+              <svg class="ico ico-draw" viewBox="0 0 24 24">
+                <path d="M3 3v18h18"/>
+                <rect x="7" y="13" width="3" height="5"/>
+                <rect x="12" y="9" width="3" height="9"/>
+                <rect x="17" y="5" width="3" height="13"/>
+              </svg>
+            </div>
+            <div>
+              <div class="kn">Stage Breakdown</div>
+              <div class="kd">Reach + pass-through % + median time at each stage of the funnel.</div>
+            </div>
+          </div>
+          <div class="kpi e anim-left" style="--d:1.55s">
+            <div class="ki">
+              <svg class="ico ico-draw" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="9"/>
+                <path d="M12 7v5l3 2"/>
+              </svg>
+            </div>
+            <div>
+              <div class="kn">Scheduled Delivery</div>
+              <div class="kd">Daily / weekly / monthly emails to any recipient list. Hourly cron, idempotent.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="split-shot anim-right" style="--d:.6s">
+        <div class="win">
+          <div class="win-chrome">
+            <div class="d" style="background:#ff5f57"></div>
+            <div class="d" style="background:#febc2e"></div>
+            <div class="d" style="background:#28c840"></div>
+            <div class="url">trackerhiring.vercel.app / reports</div>
+          </div>
+          <div class="win-body" data-empty="Drop screens/reports.png">
+            <img class="kenburn" data-src="screens/reports.png" alt="Reports page">
+          </div>
+        </div>
+        <div class="sig-pop anim-pop" style="--d:1.6s">
+          <div class="sp-lab"><span class="pulse-dot"></span> PDF Export</div>
+          <div class="sp-val">Pixel-perfect.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ SLIDE 7 - CANDIDATE EXPERIENCE ═══════════════ -->
+  <section class="slide" id="candidate" data-screen-label="07 Candidate experience">
+    <div class="grid-faint"></div>
+    <div class="float-orb a"></div>
+    <div class="slide-label">
+      <span class="pip" style="background:var(--pink);box-shadow:0 0 12px var(--pink)"></span>
+      Candidate Experience
+    </div>
+
+    <div class="split-wrap">
+      <div>
+        <div class="split-eye anim-rise" style="--d:.2s">04 - The Workday differentiator</div>
+        <h2 class="split-h1 kinetic" style="--d:.4s">
+          <span class="w" style="--i:0">Candidates</span>
+          <span class="w grad" style="--i:1">stop</span>
+          <span class="w grad" style="--i:2">guessing.</span>
+        </h2>
+        <p class="split-sub anim-rise" style="--d:1.1s">
+          Every candidate gets a tokenised public URL where they can check their status, see what's coming next, and stop emailing your recruiters "any update?". Zero login. Zero leaks.
+        </p>
+        <div class="kpi-row">
+          <div class="kpi p anim-left" style="--d:1.35s">
+            <div class="ki">
+              <svg class="ico ico-draw" viewBox="0 0 24 24">
+                <rect x="3" y="11" width="18" height="11" rx="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+            </div>
+            <div>
+              <div class="kn">Token-Gated</div>
+              <div class="kd">Possession of the URL is the auth. No password, no PII.</div>
+            </div>
+          </div>
+          <div class="kpi p anim-left" style="--d:1.5s">
+            <div class="ki">
+              <svg class="ico ico-draw" viewBox="0 0 24 24">
+                <path d="M12 2v20M2 12h20"/>
+                <circle cx="12" cy="12" r="9"/>
+              </svg>
+            </div>
+            <div>
+              <div class="kn">Narrow Safe-View</div>
+              <div class="kd">Pipeline timeline + what-to-expect. No AI scores. No comments. No interviewer names.</div>
+            </div>
+          </div>
+          <div class="kpi p anim-left" style="--d:1.65s">
+            <div class="ki">
+              <svg class="ico ico-draw" viewBox="0 0 24 24">
+                <rect x="5" y="2" width="14" height="20" rx="2"/>
+                <line x1="12" y1="18" x2="12.01" y2="18"/>
+              </svg>
+            </div>
+            <div>
+              <div class="kn">Mobile-Ready</div>
+              <div class="kd">Renders cleanly on phones. Real-world hiring is checked in transit.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="split-shot anim-right" style="--d:.6s">
+        <div class="win" style="max-width:560px;margin:0 auto">
+          <div class="win-chrome">
+            <div class="d" style="background:#ff5f57"></div>
+            <div class="d" style="background:#febc2e"></div>
+            <div class="d" style="background:#28c840"></div>
+            <div class="url">trackerhiring.vercel.app / c / token</div>
+          </div>
+          <div class="win-live"><span class="pulse-dot"></span> Public</div>
+          <div class="win-body" data-empty="Drop screens/candidate-status.png">
+            <img class="kenburn" data-src="screens/candidate-status.png" alt="Candidate self-serve status page">
+          </div>
+        </div>
+        <div class="cand-ticker anim-pop" style="--d:1.6s">
+          <div class="t-lab"><span class="pulse-dot"></span> Self-serve</div>
+          <div class="t-val">Zero "any update?" emails.</div>
+          <div class="t-sub">Candidates check their own status.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ SLIDE 8 - CTA ═══════════════ -->
+  <section class="slide" id="cta" data-screen-label="08 Launch">
+    <div class="mesh-bg"></div>
+    <div class="float-orb a"></div>
+    <div class="float-orb b"></div>
+
+    <div class="cta-wrap">
+      <div class="cta-logo anim-pop" style="--d:.1s">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width:48px;height:48px">
+          <rect x="3" y="3" width="18" height="18" rx="3"/>
+          <path d="M3 9h18M9 3v18"/>
+          <circle cx="15" cy="15" r="1.4" fill="#fff"/>
+        </svg>
+      </div>
+
+      <div class="cta-eye anim-rise" style="--d:.5s">
+        <span class="pulse-dot"></span> Available Now
+      </div>
+
+      <h1 class="cta-h1 kinetic" style="--d:.7s">
+        <span class="w" style="--i:0">Hiring,</span><br>
+        <span class="w grad" style="--i:1">made</span>
+        <span class="w grad" style="--i:2">beautiful.</span>
+      </h1>
+
+      <p class="cta-sub anim-rise" style="--d:1.7s">
+        From application to offer letter, every step lives on Slate. Production-grade. AI-native. Built for your team.
+      </p>
+
+      <div class="cta-row anim-rise" style="--d:2.0s">
+        <span class="url"><span class="at">→</span>&nbsp;trackerhiring.vercel.app</span>
+        <span class="cta-btn">Open Slate <span style="font-size:18px;line-height:1">→</span></span>
+      </div>
+
+      <div class="cta-tags anim-rise" style="--d:2.3s">
+        <span class="cta-tag">9-Stage Pipeline</span>
+        <span class="cta-tag">AI Resume Scoring</span>
+        <span class="cta-tag">Semantic Search</span>
+        <span class="cta-tag">Scheduled Reports</span>
+        <span class="cta-tag">Candidate Self-Serve</span>
+      </div>
+    </div>
+  </section>
+
+</deck-stage>
+
+<!-- Tweaks: motion, pacing -->
+<button id="tweaks-toggle" title="Tweaks">⚙</button>
+<div id="tweaks-panel">
+  <h4>Tweaks</h4>
+  <div class="row">
+    <label>Motion</label>
+    <div class="seg" data-key="motion">
+      <button data-v="min">Minimal</button>
+      <button data-v="med" class="on">Balanced</button>
+      <button data-v="max">Cinematic</button>
+    </div>
+  </div>
+  <div class="row">
+    <label>Pacing</label>
+    <div class="seg" data-key="pace">
+      <button data-v="slow">Slow</button>
+      <button data-v="med" class="on">Normal</button>
+      <button data-v="fast">Fast</button>
+    </div>
+  </div>
+  <div class="row">
+    <label>Auto-advance</label>
+    <div class="seg" data-key="auto">
+      <button data-v="on" class="on">On</button>
+      <button data-v="off">Off</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* Resource loader: deck-stage.js + image src-rewrite. */
+(function loadResources(){
+  const t = location.search || '';
+  document.querySelectorAll('img[data-src]').forEach(el=>{
+    el.src = el.getAttribute('data-src') + t;
+    // When the image actually loads, clear the placeholder pattern so the
+    // real screenshot shows cleanly.
+    el.addEventListener('load', () => {
+      const body = el.closest('.win-body');
+      if (body) body.removeAttribute('data-empty');
+    });
+  });
+  const s = document.createElement('script');
+  s.src = 'deck-stage.js' + t;
+  s.onload = initDeck;
+  s.onerror = ()=>{ console.error('deck-stage.js failed to load'); };
+  document.head.appendChild(s);
+})();
+
+function initDeck(){
+  const deck  = document.querySelector('deck-stage');
+  const prog  = document.getElementById('auto-progress');
+  const tweaks = { motion: 'med', pace: 'med', auto: 'on' };
+
+  /* Per-slide durations (ms) - tuned for a ~50s walkthrough */
+  const BASE_DURS = [3500, 7500, 7500, 7500, 7500, 7500, 7000, 5500];
+  const PACE_MUL  = { slow: 1.35, med: 1.0, fast: 0.78 };
+
+  let timer = null, elapsed = 0;
+  const TICK = 80;
+
+  function curDur(){
+    const idx = deck.index ?? 0;
+    return Math.round(BASE_DURS[idx] * PACE_MUL[tweaks.pace]);
+  }
+
+  function applyTweaks(){
+    document.body.classList.toggle('motion-min', tweaks.motion === 'min');
+    document.body.classList.toggle('motion-max', tweaks.motion === 'max');
+    if(tweaks.auto === 'off'){ stop(); prog.style.width='0%'; }
+    else if(!timer){ start(); }
+
+    document.querySelectorAll('#tweaks-panel .seg').forEach(seg=>{
+      const k = seg.dataset.key;
+      seg.querySelectorAll('button').forEach(b=>{
+        b.classList.toggle('on', b.dataset.v === tweaks[k]);
+      });
+    });
+  }
+
+  function start(){
+    if(tweaks.auto === 'off') return;
+    elapsed = 0;
+    if(timer) clearInterval(timer);
+    timer = setInterval(()=>{
+      elapsed += TICK;
+      const dur = curDur();
+      prog.style.width = Math.min(100, (elapsed/dur)*100) + '%';
+      if(elapsed >= dur){
+        elapsed = 0;
+        const n = (deck.index + 1) % deck.length;
+        deck.goTo(n);
+      }
+    }, TICK);
+  }
+  function stop(){ if(timer) clearInterval(timer); timer = null; }
+
+  function replay(slide){
+    if(!slide) return;
+    slide.querySelectorAll('*').forEach(el=>{
+      const a = el.style.animation;
+      el.style.animation = 'none';
+      void el.offsetWidth;
+      el.style.animation = a || '';
+    });
+    slide.querySelectorAll('[data-count]').forEach(el => {
+      const end = parseFloat(el.dataset.count);
+      const dec = parseInt(el.dataset.decimals || '0', 10);
+      const suf = el.dataset.suffix || '';
+      const dur = 1200;
+      const t0  = performance.now();
+      function step(t){
+        const k = Math.min(1, (t - t0) / dur);
+        const eased = 1 - Math.pow(1 - k, 3);
+        const v = end * eased;
+        el.textContent = (dec ? v.toFixed(dec) : Math.round(v)) + suf;
+        if(k < 1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    });
+  }
+
+  deck.addEventListener('slidechange', e => {
+    elapsed = 0;
+    prog.style.width = '0%';
+    replay(e.detail.slide);
+    if(tweaks.auto === 'on' && !timer) start();
+  });
+
+  setTimeout(() => {
+    const active = document.querySelector('[data-deck-active]');
+    if(active && active.querySelector('[data-count]')) {
+      const firstCounter = active.querySelector('[data-count]');
+      if(firstCounter && firstCounter.textContent === '0') replay(active);
+    }
+  }, 250);
+
+  ['keydown','click'].forEach(ev=>{
+    window.addEventListener(ev, e=>{
+      if(e.type === 'keydown' && !['ArrowLeft','ArrowRight','PageUp','PageDown',' '].includes(e.key)) return;
+      elapsed = 0;
+      prog.style.width = '0%';
+    });
+  });
+
+  const toggle = document.getElementById('tweaks-toggle');
+  const panel  = document.getElementById('tweaks-panel');
+  toggle.addEventListener('click', ()=>{ panel.classList.toggle('open'); });
+  panel.querySelectorAll('.seg button').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      const k = b.parentElement.dataset.key;
+      tweaks[k] = b.dataset.v;
+      applyTweaks();
+    });
+  });
+
+  applyTweaks();
+}
+</script>
+
+<!-- Speaker notes -->
+<script type="application/json" id="speaker-notes">
+[
+  "Slate is live. The hiring tracker designed to replace Workday plus the spreadsheets you have on the side. Every hire, in one beautifully built platform.",
+  "What is Slate. One workspace from intake to offer. AI throughout - resume scoring, semantic search, JD drafting. Built for teams - RLS-scoped, mention-aware, scheduled report delivery.",
+  "Six headline features. A nine-stage pipeline, configurable per role. AI resume scoring with extended thinking. Semantic search across your whole pool. AI-drafted JDs. Reports with a 60-day heatmap. And a candidate self-serve status page.",
+  "The pipeline. Atomic transitions in one server hop. Stage-scoped discussion threads. Per-stage feedback with keyboard shortcuts and draft auto-save. The candidate detail page is built for daily use, not occasional review.",
+  "AI is native to Slate. Resume scoring with a safety net for must-have requirements. Semantic search that lets you ask in plain English. An in-app assistant with full schema coverage - whose feedback is overdue, who is free Tuesday, what was said about a candidate.",
+  "Reports. Pixel-perfect PDF and HTML exports. Sixty-day activity heatmaps. Per-role insights. Pick which charts to include. Schedule delivery to any recipient list, daily or weekly, with the HTML attached.",
+  "The candidate experience is where Slate beats Workday. Every candidate gets a tokenised public URL. They self-check their stage and what to expect. Recruiters stop fielding any-update emails. The page leaks nothing - no scores, no comments, no interviewer names.",
+  "Slate is live at trackerhiring.vercel.app. Open it, add your first project, and ship hiring better today."
+]
+</script>
+
+</body>
+</html>
