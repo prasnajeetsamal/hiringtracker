@@ -56,7 +56,7 @@ Live at https://trackerhiring.vercel.app. Repo at https://github.com/prasnajeets
 - **DB**: Supabase Postgres. Schema in `supabase/migrations/` (run via dashboard SQL editor in numeric order).
 - **Storage**: Supabase Storage. Two private buckets - `resumes` and `jds`. Auto-created on first upload via `lib/storage.js#ensureBuckets()`.
 - **AI**: Anthropic Claude (`claude-sonnet-4-5`) via direct `fetch` (no SDK). **Always use tool-use for structured output** (evaluator) or domain queries (chatbot). Extended thinking is on by default for evaluator-style tasks.
-- **Email**: Resend via `lib/email.js`. **Falls back to a no-op if `RESEND_API_KEY` is not set** so dev keeps working. Every send is logged in `email_log`.
+- **Email**: Transport-agnostic `lib/email.js`. Priority: **(1) Gmail SMTP** via `nodemailer` if `GMAIL_USER` + `GMAIL_APP_PASSWORD` are set (lets you send from any Gmail address with no DNS work, ~500/day limit); **(2) Resend** HTTP API if `RESEND_API_KEY` is set (needs a verified sender domain in `EMAIL_FROM` to reach external recipients); **(3) no-op** in dev. `email_log.status` is suffixed with the transport (`sent[smtp]` / `sent[resend]` / `skipped_no_key`).
 - **Cron**: Vercel Cron. Registered in `vercel.json`. Handler verifies an optional `CRON_SECRET` if set.
 
 ## Migrations and what they do

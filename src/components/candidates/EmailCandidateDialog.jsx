@@ -104,7 +104,7 @@ export default function EmailCandidateDialog({ open, onClose, candidate }) {
     },
     onSuccess: (r) => {
       if (r?.skipped) {
-        toast('Email queued (no RESEND_API_KEY configured)', { icon: 'ℹ️' });
+        toast('Email logged (no transport configured - set GMAIL_USER + GMAIL_APP_PASSWORD or RESEND_API_KEY)', { icon: 'ℹ️' });
       } else {
         toast.success(`Sent to ${r?.to || candidate.email}`);
       }
