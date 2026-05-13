@@ -17,6 +17,10 @@ import JDEditor from '../components/jd/JDEditor.jsx';
 import JDTemplatePicker from '../components/jd/JDTemplatePicker.jsx';
 import PipelineBoard from '../components/pipeline/PipelineBoard.jsx';
 import StageCustomizer from '../components/pipeline/StageCustomizer.jsx';
+import ScoreGauge from '../components/dashboard/ScoreGauge.jsx';
+import RecommendationBadge from '../components/candidates/RecommendationBadge.jsx';
+import StageBadge from '../components/candidates/StageBadge.jsx';
+import { STAGES, STAGE_BY_KEY, enabledStages } from '../lib/pipeline.js';
 
 import { supabase } from '../lib/supabase.js';
 import { uploadJD, deleteRole, generateJD } from '../lib/api.js';
@@ -34,6 +38,29 @@ export default function RoleDetailPage() {
   const { data: role, isLoading, error: roleError } = useQuery({
     queryKey: ['role', roleId],
     queryFn: () => fetchRoleById(supabase, roleId),
+  });
+
+  // Role-scoped candidates + pipeline rows feeding the Insights card.
+  const { data: insightsData } = useQuery({
+    queryKey: ['role-insights', roleId],
+    enabled: !!roleId,
+    queryFn: async () => {
+      const [c, p] = await Promise.all([
+        supabase
+          .from('candidates')
+          .select('id, full_name, status, current_stage_key, ai_score, ai_analysis, created_at, updated_at')
+          .eq('role_id', roleId),
+        supabase
+          .from('candidate_pipeline')
+          .select('candidate_id, stage_key, state, started_at, completed_at')
+          .order('stage_order'),
+      ]);
+      if (c.error) throw c.error;
+      if (p.error) throw p.error;
+      const candidateIds = new Set((c.data || []).map((x) => x.id));
+      const pipeline = (p.data || []).filter((row) => candidateIds.has(row.candidate_id));
+      return { candidates: c.data || [], pipeline };
+    },
   });
 
   const [draft, setDraft] = useState({
@@ -238,6 +265,12 @@ export default function RoleDetailPage() {
           </Card>
         </div>
       </div>
+
+      {insightsData && (
+        <div className="mt-6">
+          <RoleInsights data={insightsData} stageConfig={role.stage_config} roleId={roleId} projectId={projectId} />
+        </div>
+      )}
 
       <div className="mt-6">
         <div className="text-sm font-medium text-slate-200 mb-2">Pipeline board</div>
@@ -464,4 +497,185 @@ function buildRoleHtmlBody(role, agg) {
     </div>`;
 
   return [meta, kpis, stageBlock, jdBlock].join('\n');
+}
+
+// ─── Role-scoped insights card ────────────────────────────────────────
+// Operational + analytical summary for ONE role. Shown above the pipeline
+// board on the role detail page so a hiring manager can land on the page
+// and see "where am I, what needs my attention" at a glance.
+
+const STALE_DAYS = 7;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function RoleInsights({ data, stageConfig, roleId, projectId }) {
+  const { candidates, pipeline } = data;
+  const active = candidates.filter((c) => c.status === 'active');
+  const hired = candidates.filter((c) => c.status === 'hired').length;
+  const rejected = candidates.filter((c) => c.status === 'rejected').length;
+
+  // Per-stage active count - drives the mini funnel.
+  const activeByStage = {};
+  active.forEach((c) => {
+    const k = c.current_stage_key || 'resume_submitted';
+    activeByStage[k] = (activeByStage[k] || 0) + 1;
+  });
+  const stages = enabledStages(stageConfig);
+  const maxStageCount = Math.max(1, ...Object.values(activeByStage));
+
+  // Median time-in-pipeline for hired candidates (created_at - offer.completed_at).
+  const durations = [];
+  candidates.forEach((c) => {
+    if (c.status !== 'hired') return;
+    const created = new Date(c.created_at).getTime();
+    const offerRow = pipeline.find((p) => p.candidate_id === c.id && p.stage_key === 'offer' && p.state === 'passed');
+    const ts = offerRow?.completed_at ? new Date(offerRow.completed_at).getTime() : new Date(c.updated_at).getTime();
+    if (ts >= created) durations.push(ts - created);
+  });
+  const medianDays = durations.length === 0 ? null : (() => {
+    const s = [...durations].sort((a, b) => a - b);
+    const m = Math.floor(s.length / 2);
+    const ms = s.length % 2 === 0 ? (s[m - 1] + s[m]) / 2 : s[m];
+    return Math.round(ms / DAY_MS);
+  })();
+
+  // Top scorers + stale candidates on this role.
+  const topScorers = active
+    .filter((c) => typeof c.ai_score === 'number')
+    .sort((a, b) => (b.ai_score || 0) - (a.ai_score || 0))
+    .slice(0, 5);
+  const staleCutoff = Date.now() - STALE_DAYS * DAY_MS;
+  const stale = active
+    .filter((c) => new Date(c.updated_at).getTime() < staleCutoff)
+    .sort((a, b) => new Date(a.updated_at) - new Date(b.updated_at))
+    .slice(0, 5);
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-sm font-medium text-slate-200">Insights</div>
+        <Link
+          to={`/reports?projectId=${projectId}&roleId=${roleId}`}
+          className="text-[11px] text-slate-500 hover:text-slate-300"
+        >
+          Full report →
+        </Link>
+      </div>
+
+      {/* KPI row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <MiniKpi label="Active" value={active.length} tone="indigo" />
+        <MiniKpi label="Hired" value={hired} tone="emerald" />
+        <MiniKpi label="Rejected" value={rejected} tone="rose" />
+        <MiniKpi
+          label="Median time-to-hire"
+          value={medianDays != null ? `${medianDays}d` : '-'}
+          hint={durations.length ? `${durations.length} hire${durations.length === 1 ? '' : 's'}` : 'No hires yet'}
+          tone="violet"
+        />
+      </div>
+
+      {/* Mini funnel: active count per stage as gradient bars */}
+      <div className="mb-4">
+        <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-2">Active by stage</div>
+        {active.length === 0 ? (
+          <div className="text-xs text-slate-500 italic">No active candidates yet.</div>
+        ) : (
+          <div className="space-y-1.5">
+            {stages.map((s) => {
+              const count = activeByStage[s.key] || 0;
+              if (count === 0) return null;
+              return (
+                <div key={s.key} className="flex items-center gap-2.5">
+                  <div className="w-32 text-xs text-slate-300 truncate">{s.short || s.label}</div>
+                  <div className="flex-1 h-3 rounded-md bg-slate-900/60 border border-slate-800 overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-indigo-500/80 to-violet-500/80"
+                      style={{ width: `${(count / maxStageCount) * 100}%` }}
+                    />
+                  </div>
+                  <div className="w-8 text-right text-xs tabular-nums text-slate-200">{count}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-2">Top scorers</div>
+          {topScorers.length === 0 ? (
+            <div className="text-xs text-slate-500 italic">No active candidates have been scored yet.</div>
+          ) : (
+            <div className="space-y-1">
+              {topScorers.map((c) => (
+                <Link
+                  key={c.id}
+                  to={`/candidates/${c.id}`}
+                  className="flex items-center gap-2.5 -mx-1.5 px-1.5 py-1 rounded-md hover:bg-slate-900/40"
+                >
+                  <ScoreGauge score={c.ai_score} size={28} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-slate-100 truncate">{c.full_name || 'Unnamed'}</div>
+                    <div className="text-[10px] text-slate-500 truncate">
+                      {STAGE_BY_KEY[c.current_stage_key]?.short || c.current_stage_key}
+                    </div>
+                  </div>
+                  <RecommendationBadge value={c.ai_analysis?.recommendation} />
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-2 flex items-center gap-1.5">
+            <span>Stale candidates</span>
+            <span className="text-slate-500/60">{STALE_DAYS}+ days idle</span>
+          </div>
+          {stale.length === 0 ? (
+            <div className="text-xs text-slate-500 italic">Nothing stale. Pipeline is moving.</div>
+          ) : (
+            <div className="space-y-1">
+              {stale.map((c) => {
+                const days = Math.floor((Date.now() - new Date(c.updated_at).getTime()) / DAY_MS);
+                return (
+                  <Link
+                    key={c.id}
+                    to={`/candidates/${c.id}`}
+                    className="flex items-center gap-2.5 -mx-1.5 px-1.5 py-1 rounded-md hover:bg-slate-900/40"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-slate-100 truncate">{c.full_name || 'Unnamed'}</div>
+                      <div className="text-[10px] text-slate-500 truncate">
+                        {STAGE_BY_KEY[c.current_stage_key]?.short || c.current_stage_key}
+                      </div>
+                    </div>
+                    <StageBadge stageKey={c.current_stage_key} state="in_progress" size="sm" />
+                    <span className="text-[11px] text-rose-300 tabular-nums w-8 text-right">{days}d</span>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function MiniKpi({ label, value, hint, tone = 'indigo' }) {
+  const toneCls = {
+    indigo: 'text-indigo-300',
+    emerald: 'text-emerald-300',
+    rose: 'text-rose-300',
+    violet: 'text-violet-300',
+  }[tone] || 'text-indigo-300';
+  return (
+    <div className="rounded-lg bg-slate-900/40 border border-slate-800 p-2.5">
+      <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
+      <div className={`text-xl font-semibold tabular-nums mt-0.5 ${toneCls}`}>{value}</div>
+      {hint && <div className="text-[10px] text-slate-500 mt-1">{hint}</div>}
+    </div>
+  );
 }

@@ -15,6 +15,7 @@ import Modal from '../components/common/Modal.jsx';
 import EmptyState from '../components/common/EmptyState.jsx';
 import FilterBar, { FilterSelect } from '../components/common/FilterBar.jsx';
 import StageBreakdown from '../components/reports/StageBreakdown.jsx';
+import ActivityHeatmap from '../components/reports/ActivityHeatmap.jsx';
 import RecommendationBadge from '../components/candidates/RecommendationBadge.jsx';
 import { supabase } from '../lib/supabase.js';
 import { STAGES, STAGE_BY_KEY } from '../lib/pipeline.js';
@@ -172,6 +173,39 @@ function useReportData({ projectId, roleId }) {
         rejectedByStage[k] = (rejectedByStage[k] || 0) + 1;
       });
 
+      // Activity heatmap (last 60 days). For each day we count:
+      //   - added:     candidate.created_at fell on that day
+      //   - advanced:  candidate_pipeline.state='passed' and completed_at on that day
+      //   - rejected:  candidate_pipeline.state='failed' and completed_at on that day
+      const HEATMAP_DAYS = 60;
+      const startMs = Date.now() - HEATMAP_DAYS * DAY_MS;
+      // Anchor to UTC midnight of the starting day so buckets align cleanly.
+      const anchor = new Date(startMs);
+      anchor.setUTCHours(0, 0, 0, 0);
+      const heatmapDays = Array.from({ length: HEATMAP_DAYS }, (_, i) => ({
+        date: new Date(anchor.getTime() + i * DAY_MS),
+        added: 0,
+        advanced: 0,
+        rejected: 0,
+      }));
+      const dayIndex = (iso) => {
+        if (!iso) return -1;
+        const d = new Date(iso);
+        d.setUTCHours(0, 0, 0, 0);
+        return Math.floor((d.getTime() - anchor.getTime()) / DAY_MS);
+      };
+      filtered.forEach((c) => {
+        const i = dayIndex(c.created_at);
+        if (i >= 0 && i < HEATMAP_DAYS) heatmapDays[i].added += 1;
+      });
+      pipelineRows.forEach((p) => {
+        if (!p.completed_at) return;
+        const i = dayIndex(p.completed_at);
+        if (i < 0 || i >= HEATMAP_DAYS) return;
+        if (p.state === 'passed') heatmapDays[i].advanced += 1;
+        else if (p.state === 'failed') heatmapDays[i].rejected += 1;
+      });
+
       return {
         scope: {
           projectId,
@@ -196,6 +230,7 @@ function useReportData({ projectId, roleId }) {
         scores,
         bySource,
         topCandidates,
+        heatmapDays,
       };
     },
   });
@@ -230,7 +265,7 @@ export default function ReportsPage() {
   // Export modal: pick which sections + which destination.
   const [exportOpen, setExportOpen] = useState(false);
   const [exportSections, setExportSections] = useState({
-    kpis: true, stages: true, times: true, sources: true, topscorers: true,
+    kpis: true, stages: true, times: true, heatmap: true, sources: true, topscorers: true,
   });
   const [exportBusy, setExportBusy] = useState(false);
 
@@ -544,6 +579,20 @@ export default function ReportsPage() {
           </Card>
           </div>
 
+          {/* Activity heatmap - last 60 days, added / advanced / rejected per day */}
+          <div data-section="heatmap">
+          <Card>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2 text-slate-200">
+                <TrendingUp size={16} className="text-indigo-300" />
+                <span className="font-medium">Activity heatmap</span>
+              </div>
+              <div className="text-[11px] text-slate-500">Last 60 days</div>
+            </div>
+            <ActivityHeatmap days={data.heatmapDays || []} />
+          </Card>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Source breakdown */}
             <div data-section="sources">
@@ -641,7 +690,7 @@ export default function ReportsPage() {
 
 // ─── Report body sections (CSS lives in src/lib/htmlExport.js) ─────────
 
-const ALL_SECTIONS = { kpis: true, stages: true, times: true, sources: true, topscorers: true };
+const ALL_SECTIONS = { kpis: true, stages: true, times: true, heatmap: true, sources: true, topscorers: true };
 
 function buildHtmlReport(data, sections = ALL_SECTIONS) {
   const on = (k) => sections[k] !== false;
@@ -756,6 +805,45 @@ function buildHtmlReport(data, sections = ALL_SECTIONS) {
       </table>
     </div>`;
 
+  // Heatmap: replicate the on-screen strip with inline styles. SVG would
+  // also work but inline divs keep the file self-contained + portable.
+  const heatmapBlock = !on('heatmap') || !data.heatmapDays?.length ? '' : (() => {
+    const days = data.heatmapDays;
+    const maxTotal = Math.max(1, ...days.map((d) => d.added + d.advanced + d.rejected));
+    const totalAdded = days.reduce((s, d) => s + d.added, 0);
+    const totalAdvanced = days.reduce((s, d) => s + d.advanced, 0);
+    const totalRejected = days.reduce((s, d) => s + d.rejected, 0);
+    const cols = days.map((d) => {
+      const total = d.added + d.advanced + d.rejected;
+      const colHeight = total === 0 ? 0 : Math.max(2, (total / maxTotal) * 100);
+      const seg = (n, color) => n > 0
+        ? `<div style="width:100%;background:${color};height:${(n / Math.max(1, total)) * 100}%"></div>`
+        : '';
+      return `
+        <div title="${esc(d.date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }))} - ${d.added}/${d.advanced}/${d.rejected}" style="flex:1;min-width:3px;height:100%;display:flex;flex-direction:column-reverse;border-radius:2px;overflow:hidden;">
+          ${total === 0
+            ? `<div style="width:100%;height:100%;background:rgba(30,41,59,0.2);"></div>`
+            : `<div style="width:100%;height:${colHeight}%;display:flex;flex-direction:column-reverse;">
+                 ${seg(d.added, '#6366f1')}
+                 ${seg(d.advanced, '#10b981')}
+                 ${seg(d.rejected, '#f43f5e')}
+               </div>`}
+        </div>`;
+    }).join('');
+    return `
+      <div class="panel">
+        <div class="panel__title">Activity heatmap (last 60 days)</div>
+        <div style="display:flex;gap:16px;font-size:11px;color:var(--ink-dim);margin-bottom:8px;flex-wrap:wrap;">
+          <span><span style="display:inline-block;width:10px;height:10px;background:#6366f1;border-radius:2px;vertical-align:middle;margin-right:4px;"></span>Added <strong>${totalAdded}</strong></span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:#10b981;border-radius:2px;vertical-align:middle;margin-right:4px;"></span>Advanced <strong>${totalAdvanced}</strong></span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:#f43f5e;border-radius:2px;vertical-align:middle;margin-right:4px;"></span>Rejected <strong>${totalRejected}</strong></span>
+        </div>
+        <div style="width:100%;height:96px;background:rgba(15,23,42,0.4);border:1px solid var(--panel-border);border-radius:8px;padding:6px;display:flex;align-items:flex-end;gap:1px;">
+          ${cols}
+        </div>
+      </div>`;
+  })();
+
   const bottomBlock = (!on('sources') && !on('topscorers')) ? '' : `
     <div class="grid-2">
       ${on('sources') ? `
@@ -770,7 +858,7 @@ function buildHtmlReport(data, sections = ALL_SECTIONS) {
       </div>` : ''}
     </div>`;
 
-  return [kpiBlock, stagesBlock, timesBlock, bottomBlock].filter(Boolean).join('\n');
+  return [kpiBlock, stagesBlock, timesBlock, heatmapBlock, bottomBlock].filter(Boolean).join('\n');
 }
 
 // ─── Chart-picker modal ──────────────────────────────────────────────────
@@ -779,6 +867,7 @@ const EXPORT_SECTION_OPTIONS = [
   { key: 'kpis',       label: 'KPI summary' },
   { key: 'stages',     label: 'Pipeline breakdown' },
   { key: 'times',      label: 'Time per stage' },
+  { key: 'heatmap',    label: 'Activity heatmap' },
   { key: 'sources',    label: 'Source breakdown' },
   { key: 'topscorers', label: 'Top scorers' },
 ];

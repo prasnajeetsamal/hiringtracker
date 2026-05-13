@@ -143,10 +143,36 @@ async function buildReportData(sb, { project_id, role_id }) {
     rejectedByStage[k] = (rejectedByStage[k] || 0) + 1;
   });
 
+  // 60-day activity heatmap
+  const HEATMAP_DAYS = 60;
+  const anchor = new Date(Date.now() - HEATMAP_DAYS * DAY_MS);
+  anchor.setUTCHours(0, 0, 0, 0);
+  const heatmapDays = Array.from({ length: HEATMAP_DAYS }, (_, i) => ({
+    date: new Date(anchor.getTime() + i * DAY_MS),
+    added: 0, advanced: 0, rejected: 0,
+  }));
+  const dayIndex = (iso) => {
+    if (!iso) return -1;
+    const d = new Date(iso);
+    d.setUTCHours(0, 0, 0, 0);
+    return Math.floor((d.getTime() - anchor.getTime()) / DAY_MS);
+  };
+  filtered.forEach((c) => {
+    const i = dayIndex(c.created_at);
+    if (i >= 0 && i < HEATMAP_DAYS) heatmapDays[i].added += 1;
+  });
+  pipelineRows.forEach((p) => {
+    if (!p.completed_at) return;
+    const i = dayIndex(p.completed_at);
+    if (i < 0 || i >= HEATMAP_DAYS) return;
+    if (p.state === 'passed') heatmapDays[i].advanced += 1;
+    else if (p.state === 'failed') heatmapDays[i].rejected += 1;
+  });
+
   return {
     kpis, activeByStage, passedByStage, failedByStage, skippedByStage,
     reachedByStage, conversionByStage, stageMedians, rejectedByStage,
-    timeToHire, bySource, topCandidates,
+    timeToHire, bySource, topCandidates, heatmapDays,
     projectName: project_id ? (projects.data || []).find((p) => p.id === project_id)?.name : null,
     roleName: role_id ? (roles.data || []).find((r) => r.id === role_id)?.title : null,
   };
@@ -220,6 +246,39 @@ function buildBody(data, sections) {
       </table>
     </div>`;
 
+  const heatmapBlock = !on('heatmap') || !data.heatmapDays?.length ? '' : (() => {
+    const days = data.heatmapDays;
+    const maxTotal = Math.max(1, ...days.map((d) => d.added + d.advanced + d.rejected));
+    const totalAdded = days.reduce((s, d) => s + d.added, 0);
+    const totalAdvanced = days.reduce((s, d) => s + d.advanced, 0);
+    const totalRejected = days.reduce((s, d) => s + d.rejected, 0);
+    const cols = days.map((d) => {
+      const total = d.added + d.advanced + d.rejected;
+      const colHeight = total === 0 ? 0 : Math.max(2, (total / maxTotal) * 100);
+      const seg = (n, color) => n > 0 ? `<div style="width:100%;background:${color};height:${(n / Math.max(1, total)) * 100}%"></div>` : '';
+      return `
+        <div style="flex:1;min-width:3px;height:100%;display:flex;flex-direction:column-reverse;border-radius:2px;overflow:hidden;">
+          ${total === 0
+            ? `<div style="width:100%;height:100%;background:rgba(30,41,59,0.2);"></div>`
+            : `<div style="width:100%;height:${colHeight}%;display:flex;flex-direction:column-reverse;">
+                 ${seg(d.added, '#6366f1')}${seg(d.advanced, '#10b981')}${seg(d.rejected, '#f43f5e')}
+               </div>`}
+        </div>`;
+    }).join('');
+    return `
+      <div class="panel">
+        <div class="panel__title">Activity heatmap (last 60 days)</div>
+        <div style="display:flex;gap:16px;font-size:11px;color:var(--ink-dim);margin-bottom:8px;flex-wrap:wrap;">
+          <span><span style="display:inline-block;width:10px;height:10px;background:#6366f1;border-radius:2px;vertical-align:middle;margin-right:4px;"></span>Added <strong>${totalAdded}</strong></span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:#10b981;border-radius:2px;vertical-align:middle;margin-right:4px;"></span>Advanced <strong>${totalAdvanced}</strong></span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:#f43f5e;border-radius:2px;vertical-align:middle;margin-right:4px;"></span>Rejected <strong>${totalRejected}</strong></span>
+        </div>
+        <div style="width:100%;height:96px;background:rgba(15,23,42,0.4);border:1px solid var(--panel-border);border-radius:8px;padding:6px;display:flex;align-items:flex-end;gap:1px;">
+          ${cols}
+        </div>
+      </div>`;
+  })();
+
   const sourceRows = Object.entries(data.bySource).sort((a, b) => b[1] - a[1]).map(([src, count]) => `
     <div class="source-row">
       <div class="source-row__label">${esc(src)}</div>
@@ -244,7 +303,7 @@ function buildBody(data, sections) {
       ${on('topscorers') ? `<div class="panel"><div class="panel__title">Top candidates by AI score</div>${topRows}</div>` : ''}
     </div>`;
 
-  return [kpiBlock, stagesBlock, timesBlock, bottomBlock].filter(Boolean).join('\n');
+  return [kpiBlock, stagesBlock, timesBlock, heatmapBlock, bottomBlock].filter(Boolean).join('\n');
 }
 
 export default async function handler(req, res) {

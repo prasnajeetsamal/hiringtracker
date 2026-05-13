@@ -23,6 +23,7 @@ const ALL_SECTIONS = [
   { key: 'kpis',       label: 'KPI summary' },
   { key: 'stages',     label: 'Pipeline breakdown' },
   { key: 'times',      label: 'Time per stage' },
+  { key: 'heatmap',    label: 'Activity heatmap' },
   { key: 'sources',    label: 'Source breakdown' },
   { key: 'topscorers', label: 'Top scorers' },
 ];
