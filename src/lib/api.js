@@ -116,3 +116,7 @@ export async function notifyMention({ commentId }) {
 export async function transitionCandidate({ candidateId, action }) {
   return req('/api/transition-candidate', { method: 'POST', body: { candidateId, action } });
 }
+
+export async function emailCandidate(payload) {
+  return req('/api/email-candidate', { method: 'POST', body: payload });
+}

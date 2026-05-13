@@ -17,6 +17,7 @@ import StageBadge from '../components/candidates/StageBadge.jsx';
 import RecommendationBadge from '../components/candidates/RecommendationBadge.jsx';
 import InterviewerAssignment from '../components/candidates/InterviewerAssignment.jsx';
 import ConsiderForRoleDialog from '../components/candidates/ConsiderForRoleDialog.jsx';
+import EmailCandidateDialog from '../components/candidates/EmailCandidateDialog.jsx';
 import ResumeView from '../components/candidates/ResumeView.jsx';
 import TagsEditor from '../components/candidates/TagsEditor.jsx';
 import FeedbackForm from '../components/feedback/FeedbackForm.jsx';
@@ -38,6 +39,7 @@ export default function CandidateDetailPage() {
   const { isAdmin } = useIsAdmin();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [considerOpen, setConsiderOpen] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
   // Collapse the AI evaluation by default if it's been scored - saves space.
   const [aiOpen, setAiOpen] = useState(false);
 
@@ -181,6 +183,22 @@ export default function CandidateDetailPage() {
     onError: (e) => toast.error(e.message),
   });
 
+  // Emails sent to this candidate (audit trail rendered as a sidebar card).
+  // Filters by the candidateId we stamp into email_log.payload on send.
+  const { data: candidateEmails } = useQuery({
+    queryKey: ['candidate-emails', candidateId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('email_log')
+        .select('id, to_email, template, payload, status, created_at')
+        .eq('payload->>candidateId', candidateId)
+        .order('created_at', { ascending: false })
+        .limit(10);
+      if (error) throw error;
+      return data;
+    },
+  });
+
   // Sibling candidates (same person on other roles) - match by email when set.
   const { data: siblings } = useQuery({
     queryKey: ['siblings', candidate?.email, candidateId],
@@ -232,6 +250,7 @@ export default function CandidateDetailPage() {
         }
         actions={
           <>
+            <Button variant="ghost" icon={Mail} onClick={() => setEmailOpen(true)} disabled={!candidate.email}>Email candidate</Button>
             <Button variant="ghost" icon={FileCode} onClick={() => exportCandidateHtml({ candidate, pipeline })}>HTML report</Button>
             <Button variant="ghost" icon={Copy} onClick={() => setConsiderOpen(true)}>Consider for another role</Button>
             {!isTerminal && (
@@ -410,6 +429,47 @@ export default function CandidateDetailPage() {
             />
           </Card>
 
+          {(candidateEmails?.length || 0) > 0 && (
+            <Card>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2 text-slate-200">
+                  <Mail size={16} className="text-indigo-300" />
+                  <span className="font-medium text-sm">Emails sent</span>
+                </div>
+                {candidate.email && (
+                  <button
+                    onClick={() => setEmailOpen(true)}
+                    className="text-[11px] text-indigo-300 hover:text-indigo-200"
+                  >
+                    Compose →
+                  </button>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                {candidateEmails.map((e) => {
+                  const tpl = (e.template || '').replace(/^candidate_/, '').replace(/_/g, ' ');
+                  const failed = String(e.status || '').startsWith('error') || String(e.status || '').startsWith('exception');
+                  const skipped = e.status === 'skipped_no_key';
+                  return (
+                    <div key={e.id} className="flex items-start gap-2 -mx-2 px-2 py-1 rounded-md hover:bg-slate-900/40">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs text-slate-200 truncate capitalize">{tpl}</div>
+                        <div className="text-[11px] text-slate-500 truncate">
+                          {e.payload?.subject || e.to_email}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-0.5 shrink-0">
+                        <span className="text-[10px] text-slate-500 tabular-nums">{new Date(e.created_at).toLocaleDateString()}</span>
+                        {failed && <span className="text-[10px] text-rose-300">failed</span>}
+                        {skipped && <span className="text-[10px] text-amber-300">no-key</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
+
           {(siblings?.length || 0) > 0 && (
             <Card>
               <div className="flex items-center gap-2 text-slate-200 mb-3">
@@ -453,6 +513,12 @@ export default function CandidateDetailPage() {
       <ConsiderForRoleDialog
         open={considerOpen}
         onClose={() => setConsiderOpen(false)}
+        candidate={candidate}
+      />
+
+      <EmailCandidateDialog
+        open={emailOpen}
+        onClose={() => setEmailOpen(false)}
         candidate={candidate}
       />
 
