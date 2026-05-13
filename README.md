@@ -1,10 +1,10 @@
-# Slate — Hiring Tracker
+# Slate - Hiring Tracker
 
-A focused hiring tracker for managing requisitions, candidates, interview pipelines, feedback, and interviewer availability. Sibling project to ResumeScreener — same stack, same auth conventions.
+A focused hiring tracker for managing requisitions, candidates, interview pipelines, feedback, and interviewer availability. Sibling project to ResumeScreener - same stack, same auth conventions.
 
 ## Status
 
-**v1.0 — full feature set.** What works today:
+**v1.0 - full feature set.** What works today:
 
 - Supabase auth (sign up, sign in, sign out, password reset).
 - Sidebar + dark-theme app shell.
@@ -44,12 +44,12 @@ A focused hiring tracker for managing requisitions, candidates, interview pipeli
 
 2. **Provision a Supabase project** at https://supabase.com.
 
-3. **Run migrations** — paste each file in `supabase/migrations/` into the Supabase SQL Editor in order:
+3. **Run migrations** - paste each file in `supabase/migrations/` into the Supabase SQL Editor in order:
 
-   - `0001_init.sql` — tables, indexes, profile auto-create trigger
-   - `0002_rls.sql` — RLS policies (permissive for v0.1)
-   - `0003_seed_templates.sql` — system JD templates
-   - `0004_v05_v10.sql` — tightens RLS to project membership, adds candidate_pipeline auto-creation trigger, adds audit-log triggers
+   - `0001_init.sql` - tables, indexes, profile auto-create trigger
+   - `0002_rls.sql` - RLS policies (permissive for v0.1)
+   - `0003_seed_templates.sql` - system JD templates
+   - `0004_v05_v10.sql` - tightens RLS to project membership, adds candidate_pipeline auto-creation trigger, adds audit-log triggers
 
 4. **Copy env**
 
@@ -95,10 +95,10 @@ Strict rule (carried from ResumeScreener): only real endpoints in `api/`. Shared
 
 ## Reusable patterns from ResumeScreener
 
-- `lib/auth.js` — JWT verification (HS256 + JWKS asymmetric).
-- `src/lib/supabase.js`, `src/lib/AuthContext.jsx`, `src/components/auth/AuthScreen.jsx`, `src/components/layout/UserMenu.jsx` — auth UX.
-- `lib/parse-file.js` — multipart streaming + PDF/DOCX/TXT extraction (split out of `api/extract.js`).
-- `src/lib/api.js` — centralized fetch with bearer token.
+- `lib/auth.js` - JWT verification (HS256 + JWKS asymmetric).
+- `src/lib/supabase.js`, `src/lib/AuthContext.jsx`, `src/components/auth/AuthScreen.jsx`, `src/components/layout/UserMenu.jsx` - auth UX.
+- `lib/parse-file.js` - multipart streaming + PDF/DOCX/TXT extraction (split out of `api/extract.js`).
+- `src/lib/api.js` - centralized fetch with bearer token.
 
 ## Roadmap
 

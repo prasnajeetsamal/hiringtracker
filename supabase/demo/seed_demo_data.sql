@@ -141,7 +141,7 @@ select
         when pl.fake_score >= 65 then 'CONSIDER'
         else 'REJECT'
       end,
-      'summary', 'Demo evaluation — synthetic data for visualization purposes.',
+      'summary', 'Demo evaluation - synthetic data for visualization purposes.',
       'detailedAnalysis', 'This candidate is part of the demo seed and shows representative metrics across the rubric. In a real evaluation Claude would produce a 150-300 word analysis grounded in the resume and JD; this is a placeholder.',
       'strengths', jsonb_build_array('Demo strength 1', 'Demo strength 2', 'Demo strength 3'),
       'weaknesses', jsonb_build_array('Demo weakness 1', 'Demo weakness 2'),
@@ -162,7 +162,7 @@ select
   end,
   array['demo'],
   case when pl.source = 'linkedin' then null else
-    'DEMO RESUME — ' || pl.full_name || E'\n\n' ||
+    'DEMO RESUME - ' || pl.full_name || E'\n\n' ||
     'Synthetic resume content for visualization purposes only. ' ||
     'In production this would be the parsed text of an uploaded PDF.'
   end
@@ -178,7 +178,7 @@ select
   hp.owner_id,
   '<p>' || (array[
     'Strong written work in the take-home. Recommend advancing.',
-    'Mixed signal on system-design depth — would want a second interviewer.',
+    'Mixed signal on system-design depth - would want a second interviewer.',
     'Background fits perfectly. Schedule technical round next.',
     'Promising profile but the experience is light for this level.',
     'Excellent communication. Worth a panel conversation.'

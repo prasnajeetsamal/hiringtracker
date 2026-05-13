@@ -47,10 +47,10 @@ export default function StageBreakdown({ active, passed, failed, skipped }) {
                 </>
               )}
             </div>
-            <div className="col-span-1 text-right text-xs tabular-nums text-slate-200">{here || '—'}</div>
-            <div className="col-span-1 text-right text-xs tabular-nums text-emerald-300">{pass || '—'}</div>
-            <div className="col-span-1 text-right text-xs tabular-nums text-rose-300">{rej || '—'}</div>
-            <div className="col-span-1 text-right text-xs tabular-nums text-slate-500">{skp || '—'}</div>
+            <div className="col-span-1 text-right text-xs tabular-nums text-slate-200">{here || '-'}</div>
+            <div className="col-span-1 text-right text-xs tabular-nums text-emerald-300">{pass || '-'}</div>
+            <div className="col-span-1 text-right text-xs tabular-nums text-rose-300">{rej || '-'}</div>
+            <div className="col-span-1 text-right text-xs tabular-nums text-slate-500">{skp || '-'}</div>
           </div>
         );
       })}

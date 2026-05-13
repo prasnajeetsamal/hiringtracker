@@ -4,7 +4,7 @@ import { Tag as TagIcon, X, Plus } from 'lucide-react';
 /**
  * Inline tag editor for a candidate.
  *
- *   value: string[]   — current tags
+ *   value: string[]   - current tags
  *   onChange: (next: string[]) => void
  *   readOnly?: boolean
  */
@@ -38,23 +38,23 @@ export default function TagsEditor({ value = [], onChange, readOnly = false, sug
   const sugg = suggestions.filter((s) => !tags.includes(s) && (!input || s.startsWith(input.toLowerCase())));
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-1.5 min-h-[28px]">
+    <div className="space-y-2 min-w-0">
+      <div className="flex flex-wrap items-center gap-1.5 min-h-[28px] min-w-0">
         {tags.length === 0 && readOnly && (
           <span className="text-[11px] text-slate-500 italic">No tags</span>
         )}
         {tags.map((t) => (
           <span
             key={t}
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-indigo-500/10 text-indigo-200 border border-indigo-500/30"
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-indigo-500/10 text-indigo-200 border border-indigo-500/30 max-w-full break-all"
           >
-            <TagIcon size={9} className="text-indigo-300" />
-            {t}
+            <TagIcon size={9} className="text-indigo-300 shrink-0" />
+            <span className="break-all">{t}</span>
             {!readOnly && (
               <button
                 type="button"
                 onClick={() => remove(t)}
-                className="text-indigo-300/70 hover:text-rose-200 ml-0.5"
+                className="text-indigo-300/70 hover:text-rose-200 ml-0.5 shrink-0"
                 title="Remove tag"
               >
                 <X size={10} />
@@ -68,8 +68,8 @@ export default function TagsEditor({ value = [], onChange, readOnly = false, sug
             onChange={(e) => setInput(e.target.value.replace(/[, ]+$/, ''))}
             onKeyDown={onKey}
             onBlur={() => input.trim() && add(input)}
-            placeholder={tags.length ? '+ add tag' : '+ add a tag (Enter / comma to commit)'}
-            className="bg-transparent border-0 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none min-w-[140px]"
+            placeholder={tags.length ? '+ add tag' : '+ add a tag'}
+            className="bg-transparent border-0 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none flex-1 min-w-[80px]"
           />
         )}
       </div>

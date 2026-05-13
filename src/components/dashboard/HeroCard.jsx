@@ -42,7 +42,7 @@ export default function HeroCard({ name, kpis, today = new Date() }) {
           <Calendar size={12} /> {dateLabel}
         </div>
         <h1 className="text-3xl font-semibold tracking-tight text-slate-100">
-          {timeGreeting(today)}{name ? `, ${name.split(' ')[0]}` : ''}.
+          {timeGreeting(today)}{name ? `, ${name.split(' ')[0]}` : ''}
         </h1>
         <div className="mt-2 inline-flex items-center gap-2 text-sm text-slate-300">
           <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-gradient-to-br from-indigo-500 via-violet-500 to-pink-500 text-white">

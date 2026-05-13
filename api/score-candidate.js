@@ -1,5 +1,5 @@
 // api/score-candidate.js
-// Inputs: { candidateId, roleId } — server resolves JD and resume text from DB
+// Inputs: { candidateId, roleId } - server resolves JD and resume text from DB
 // and writes ai_score + ai_analysis back onto the candidate row.
 //
 // Adapted from ResumeScreener's api/score.js, with extensions:
@@ -117,7 +117,7 @@ const EVAL_TOOL = {
             requirement: { type: 'string' },
             type: { type: 'string', enum: ['must', 'preferred', 'nice'] },
             match: { type: 'boolean' },
-            confidence: { type: 'number', description: '0-100 — calibrate honestly' },
+            confidence: { type: 'number', description: '0-100 - calibrate honestly' },
             reasoning: { type: 'string', description: 'Brief reasoning (≤ 25 words).' },
             evidence: { type: 'string', description: 'Short verbatim quote from the resume (≤ 25 words), or "" if none.' },
           },
@@ -200,7 +200,7 @@ export default async function handler(req, res) {
 
     const sys = `You are an expert technical recruiter evaluating one candidate against one job. You are precise, evidence-based, skeptical, and never invent facts.
 
-EVALUATION PROCESS — follow this order in your reasoning:
+EVALUATION PROCESS - follow this order in your reasoning:
 A) FACT EXTRACTION (from the resume only)
    - Education, total years of *relevant professional* experience, location, key skills.
    - For each fact, point to the line(s) in the resume that support it.
@@ -212,7 +212,7 @@ B) REQUIREMENT IDENTIFICATION (from the JD)
 
 C) REQUIREMENT MATCHING (one pass per identified requirement)
    - Find the strongest evidence in the resume.
-   - Mark match=true ONLY if the evidence shows real professional application —
+   - Mark match=true ONLY if the evidence shows real professional application -
      not a passing mention, not a coursework reference, not "familiar with".
    - Pull a verbatim ≤25-word quote into 'evidence'. Use "" only if truly nothing supports it.
 
@@ -223,13 +223,13 @@ E) RECOMMENDATION
    - Apply hard constraint rules before rubric thresholds.
 
 GROUND RULES (strict):
-1. Use ONLY facts present in the resume text. If something is not stated, set the field to 'Unknown' — do not assume.
+1. Use ONLY facts present in the resume text. If something is not stated, set the field to 'Unknown' - do not assume.
 2. Years of experience = total full years of relevant professional experience. Sum non-overlapping date ranges from the work history; 'Present' / 'Current' means today. Round DOWN. Internships and academic projects do NOT count.
 3. SEMANTIC equivalence is required, not literal keyword overlap.
    - 'Led a team of 5' matches 'team leadership'.
    - 'Built data pipelines in Spark' matches 'big data engineering'.
    - Tech families count: 'PostgreSQL' matches 'SQL'; 'Next.js' matches 'React'.
-4. ANTI-BIAS GUARDRAILS — do NOT give credit when:
+4. ANTI-BIAS GUARDRAILS - do NOT give credit when:
    - A skill appears only in a 'Skills' list with no project/role evidence.
    - A skill appears only in a course title or single-sentence personal-project bullet.
    - The resume uses vague phrases like 'exposure to', 'familiar with', 'knowledge of'.
@@ -243,16 +243,16 @@ ROLE CONTEXT (calibrate against these signals):
 - Location: ${roleLocation}
 
 If the level signals a senior role (Senior, Staff, Principal, Lead, Architect, Head),
-set a high bar — multiple years of progressively responsible experience, evidence of
+set a high bar - multiple years of progressively responsible experience, evidence of
 leading initiatives, mentoring, owning systems end-to-end.
-If the level signals junior/intern, calibrate accordingly — strong fundamentals and
+If the level signals junior/intern, calibrate accordingly - strong fundamentals and
 trajectory matter more than total years.
 
 LOCATION FIT:
 - If work mode is 'remote', do not penalize for location mismatch.
 - If work mode is 'office' or 'hybrid' and the candidate's resume location clearly
   doesn't match the role location, surface this as a concern in 'weaknesses' but
-  don't auto-reject — relocation is possible.
+  don't auto-reject - relocation is possible.
 
 SCORING RUBRIC (overallScore, 0-100):
 - 90-100  Outstanding fit. All musts met, most preferreds met, evidence of measurable impact (numbers, scale, outcomes).
@@ -265,7 +265,7 @@ CONSTRAINTS THAT OVERRIDE RUBRIC:
 - If a 'must' requirement is unmet → overallScore MUST NOT exceed 70.
 - If two or more 'must' requirements are unmet → recommendation MUST be REJECT.
 
-DETAILED ANALYSIS — REQUIRED:
+DETAILED ANALYSIS - REQUIRED:
 Write 150-300 words of plain prose (no markdown, no bullets) explaining the holistic verdict. Cover, in this order:
   • Domain match (does the candidate's career line up with this role/industry?)
   • Experience level vs. the seniority signaled by the JD and role level
@@ -273,7 +273,7 @@ Write 150-300 words of plain prose (no markdown, no bullets) explaining the holi
   • Evidence of measurable impact (numbers, scale, ownership, leadership)
   • Alignment with the role's key responsibilities
   • Red flags or notable gaps
-Be specific to THIS resume — never generic. Refer to companies, technologies, and accomplishments by name when they appear.
+Be specific to THIS resume - never generic. Refer to companies, technologies, and accomplishments by name when they appear.
 
 SELECTION REASONS (3-6 if HIRE/CONSIDER):
 Each must reference concrete evidence (companies, projects, scale, years).
@@ -285,7 +285,7 @@ Evidence-grounded gaps. GOOD: 'Below the 8-year minimum: resume shows ~4 years p
 
 You MUST respond by calling the 'submit_evaluation' tool. Do not respond with plain text.`;
 
-    const user = `JOB DESCRIPTION (preserved structure — ## are headings, - are bullets):
+    const user = `JOB DESCRIPTION (preserved structure - ## are headings, - are bullets):
 """
 ${truncate(jdStructured, MAX_INPUT_CHARS)}
 """

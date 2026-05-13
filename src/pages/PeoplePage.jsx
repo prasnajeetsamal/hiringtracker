@@ -60,7 +60,7 @@ export default function PeoplePage() {
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['people'] });
       if (res.inviteUrl) {
-        // SMTP not configured — surface the link to share manually
+        // SMTP not configured - surface the link to share manually
         setInviteUrl(res.inviteUrl);
         toast('Invite link generated', { icon: 'ℹ️' });
       } else {
@@ -110,7 +110,7 @@ export default function PeoplePage() {
               <tbody>
                 {(people || []).map((p) => (
                   <tr key={p.id} className="border-b border-slate-800/60">
-                    <td className="px-4 py-2.5 text-slate-100">{p.full_name || <span className="text-slate-500">—</span>}</td>
+                    <td className="px-4 py-2.5 text-slate-100">{p.full_name || <span className="text-slate-500">-</span>}</td>
                     <td className="px-4 py-2.5 text-slate-300">{p.email}</td>
                     <td className="px-4 py-2.5">
                       {isAdmin && p.id !== user.id ? (
@@ -125,7 +125,7 @@ export default function PeoplePage() {
                         <span className="text-xs text-slate-300">{ROLE_LABEL[p.role] || p.role}</span>
                       )}
                     </td>
-                    <td className="px-4 py-2.5 text-[11px] text-slate-400">{p.timezone || '—'}</td>
+                    <td className="px-4 py-2.5 text-[11px] text-slate-400">{p.timezone || '-'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -152,7 +152,7 @@ export default function PeoplePage() {
         {inviteUrl ? (
           <div className="space-y-3">
             <p className="text-sm text-slate-300">
-              Email delivery isn't set up in your Supabase project — share this invite link with <strong>{form.email}</strong> manually:
+              Email delivery isn't set up in your Supabase project - share this invite link with <strong>{form.email}</strong> manually:
             </p>
             <div className="flex gap-2">
               <input

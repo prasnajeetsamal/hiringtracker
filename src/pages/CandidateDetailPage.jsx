@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, ArrowRight, X, SkipForward, Sparkles, Linkedin, Mail, Phone,
   FileText, Wand2, MessageSquare, Trash2, Copy, ChevronDown, ChevronUp, AlertCircle,
+  Check, CircleDot, Circle, ChevronRight, FileCode,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -25,8 +26,9 @@ import CommentThread from '../components/comments/CommentThread.jsx';
 import { supabase } from '../lib/supabase.js';
 import { useAuth } from '../lib/AuthContext.jsx';
 import { useIsAdmin } from '../lib/useIsAdmin.js';
-import { scoreCandidate, summarizeFeedback, deleteCandidate } from '../lib/api.js';
-import { STAGE_BY_KEY, enabledStages } from '../lib/pipeline.js';
+import { scoreCandidate, summarizeFeedback, deleteCandidate, transitionCandidate } from '../lib/api.js';
+import { STAGE_BY_KEY } from '../lib/pipeline.js';
+import { renderHtmlDocument, downloadHtmlFile, esc, sanitizeHtml } from '../lib/htmlExport.js';
 
 export default function CandidateDetailPage() {
   const { candidateId } = useParams();
@@ -36,7 +38,7 @@ export default function CandidateDetailPage() {
   const { isAdmin } = useIsAdmin();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [considerOpen, setConsiderOpen] = useState(false);
-  // Collapse the AI evaluation by default if it's been scored — saves space.
+  // Collapse the AI evaluation by default if it's been scored - saves space.
   const [aiOpen, setAiOpen] = useState(false);
 
   const { data: candidate, isLoading } = useQuery({
@@ -71,7 +73,7 @@ export default function CandidateDetailPage() {
     },
   });
 
-  // Determine "my pipeline rows" — rows where I'm assigned as interviewer
+  // Determine "my pipeline rows" - rows where I'm assigned as interviewer
   const pipelineIds = (pipeline || []).map((p) => p.id);
   const { data: myAssignments } = useQuery({
     queryKey: ['my-assignments-for-candidate', candidateId, pipelineIds.join(',')],
@@ -95,7 +97,7 @@ export default function CandidateDetailPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('feedback')
-        .select('id, pipeline_id, recommendation, rating, body_html')
+        .select('id, pipeline_id, recommendation, rating, body_html, submitted_at')
         .eq('interviewer_id', user.id)
         .in('pipeline_id', pipelineIds);
       if (error) throw error;
@@ -104,97 +106,29 @@ export default function CandidateDetailPage() {
   });
   const myFeedbackByPipeline = Object.fromEntries((myFeedback || []).map((f) => [f.pipeline_id, f]));
 
+  // All three transitions go through one server endpoint so the multi-row
+  // update is atomic - a partial failure can't leave the pipeline half-flipped.
+  const onTransitionSuccess = (label) => () => {
+    toast.success(label);
+    qc.invalidateQueries({ queryKey: ['candidate', candidateId] });
+    qc.invalidateQueries({ queryKey: ['candidate-pipeline', candidateId] });
+    qc.invalidateQueries({ queryKey: ['candidates', candidate?.role_id] });
+    qc.invalidateQueries({ queryKey: ['candidates-all'] });
+    qc.invalidateQueries({ queryKey: ['dashboard'] });
+  };
   const advance = useMutation({
-    mutationFn: async () => {
-      if (!candidate || !pipeline) throw new Error('Loading…');
-      const cfg = candidate.role?.stage_config;
-      const enabled = enabledStages(cfg);
-      const currentIdx = enabled.findIndex((s) => s.key === candidate.current_stage_key);
-      const next = enabled[currentIdx + 1];
-
-      // Mark current pipeline row 'passed'
-      const currentRow = pipeline.find((p) => p.stage_key === candidate.current_stage_key);
-      if (currentRow) {
-        await supabase
-          .from('candidate_pipeline')
-          .update({ state: 'passed', completed_at: new Date().toISOString(), decided_by: user.id })
-          .eq('id', currentRow.id);
-      }
-      if (!next) {
-        // Final stage passed → mark hired
-        await supabase.from('candidates').update({ status: 'hired' }).eq('id', candidateId);
-        return;
-      }
-      // Mark next pipeline row 'in_progress'
-      const nextRow = pipeline.find((p) => p.stage_key === next.key);
-      if (nextRow) {
-        await supabase
-          .from('candidate_pipeline')
-          .update({ state: 'in_progress', started_at: new Date().toISOString() })
-          .eq('id', nextRow.id);
-      }
-      await supabase.from('candidates').update({ current_stage_key: next.key }).eq('id', candidateId);
-    },
-    onSuccess: () => {
-      toast.success('Advanced');
-      qc.invalidateQueries({ queryKey: ['candidate', candidateId] });
-      qc.invalidateQueries({ queryKey: ['candidate-pipeline', candidateId] });
-      qc.invalidateQueries({ queryKey: ['candidates', candidate?.role_id] });
-    },
+    mutationFn: async () => transitionCandidate({ candidateId, action: 'advance' }),
+    onSuccess: onTransitionSuccess('Advanced'),
     onError: (e) => toast.error(e.message),
   });
-
   const reject = useMutation({
-    mutationFn: async () => {
-      const currentRow = pipeline?.find((p) => p.stage_key === candidate.current_stage_key);
-      if (currentRow) {
-        await supabase
-          .from('candidate_pipeline')
-          .update({ state: 'failed', completed_at: new Date().toISOString(), decided_by: user.id })
-          .eq('id', currentRow.id);
-      }
-      await supabase.from('candidates').update({ status: 'rejected' }).eq('id', candidateId);
-    },
-    onSuccess: () => {
-      toast.success('Candidate rejected');
-      qc.invalidateQueries({ queryKey: ['candidate', candidateId] });
-      qc.invalidateQueries({ queryKey: ['candidate-pipeline', candidateId] });
-      qc.invalidateQueries({ queryKey: ['candidates', candidate?.role_id] });
-    },
+    mutationFn: async () => transitionCandidate({ candidateId, action: 'reject' }),
+    onSuccess: onTransitionSuccess('Candidate rejected'),
     onError: (e) => toast.error(e.message),
   });
-
   const skip = useMutation({
-    mutationFn: async () => {
-      const cfg = candidate.role?.stage_config;
-      const enabled = enabledStages(cfg);
-      const currentIdx = enabled.findIndex((s) => s.key === candidate.current_stage_key);
-      const next = enabled[currentIdx + 1];
-      const currentRow = pipeline.find((p) => p.stage_key === candidate.current_stage_key);
-      if (currentRow) {
-        await supabase
-          .from('candidate_pipeline')
-          .update({ state: 'skipped', completed_at: new Date().toISOString(), decided_by: user.id })
-          .eq('id', currentRow.id);
-      }
-      if (next) {
-        const nextRow = pipeline.find((p) => p.stage_key === next.key);
-        if (nextRow) {
-          await supabase
-            .from('candidate_pipeline')
-            .update({ state: 'in_progress', started_at: new Date().toISOString() })
-            .eq('id', nextRow.id);
-        }
-        await supabase.from('candidates').update({ current_stage_key: next.key }).eq('id', candidateId);
-      } else {
-        await supabase.from('candidates').update({ status: 'hired' }).eq('id', candidateId);
-      }
-    },
-    onSuccess: () => {
-      toast.success('Stage skipped');
-      qc.invalidateQueries({ queryKey: ['candidate', candidateId] });
-      qc.invalidateQueries({ queryKey: ['candidate-pipeline', candidateId] });
-    },
+    mutationFn: async () => transitionCandidate({ candidateId, action: 'skip' }),
+    onSuccess: onTransitionSuccess('Stage skipped'),
     onError: (e) => toast.error(e.message),
   });
 
@@ -247,7 +181,7 @@ export default function CandidateDetailPage() {
     onError: (e) => toast.error(e.message),
   });
 
-  // Sibling candidates (same person on other roles) — match by email when set.
+  // Sibling candidates (same person on other roles) - match by email when set.
   const { data: siblings } = useQuery({
     queryKey: ['siblings', candidate?.email, candidateId],
     enabled: !!candidate?.email,
@@ -298,6 +232,7 @@ export default function CandidateDetailPage() {
         }
         actions={
           <>
+            <Button variant="ghost" icon={FileCode} onClick={() => exportCandidateHtml({ candidate, pipeline })}>HTML report</Button>
             <Button variant="ghost" icon={Copy} onClick={() => setConsiderOpen(true)}>Consider for another role</Button>
             {!isTerminal && (
               <>
@@ -330,7 +265,7 @@ export default function CandidateDetailPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 space-y-4">
-          {/* AI evaluation — collapsible (collapsed by default once scored) */}
+          {/* AI evaluation - collapsible (collapsed by default once scored) */}
           <Card padding={false}>
             <div className="flex items-center justify-between px-5 py-3">
               <button
@@ -343,7 +278,7 @@ export default function CandidateDetailPage() {
                 <span className="font-medium">AI evaluation</span>
                 {ai && (
                   <>
-                    <span className="text-2xl font-bold text-slate-100 ml-2 tabular-nums">{ai.overallScore ?? '—'}</span>
+                    <span className="text-2xl font-bold text-slate-100 ml-2 tabular-nums">{ai.overallScore ?? '-'}</span>
                     <span className="text-[10px] text-slate-500 mt-0.5">/100</span>
                     <RecommendationBadge value={ai.recommendation} />
                     <ChevronDown
@@ -385,85 +320,31 @@ export default function CandidateDetailPage() {
             )}
           </Card>
 
-          {/* Pipeline timeline + per-stage interviewer assignment */}
+          {/* Pipeline timeline - current stage expanded, others collapsed */}
           <Card>
-            <div className="text-slate-200 font-medium mb-3">Pipeline</div>
-            <div className="space-y-3">
-              {(pipeline || []).map((p) => {
-                const stage = STAGE_BY_KEY[p.stage_key];
-                const isCurrent = p.stage_key === candidate.current_stage_key && !isTerminal;
-                const stageEnabledCfg = candidate.role?.stage_config?.find((c) => c.stage_key === p.stage_key);
-                return (
-                  <div
-                    key={p.id}
-                    className={`rounded-lg border px-3 py-2.5 ${
-                      isCurrent ? 'border-indigo-500/40 bg-indigo-500/5' : 'border-slate-800 bg-slate-900/40'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-slate-100">{stage?.label || p.stage_key}</span>
-                        <StageBadge stageKey={p.stage_key} state={p.state} size="sm" />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-slate-500">
-                          {p.completed_at ? `Completed ${new Date(p.completed_at).toLocaleDateString()}` :
-                           p.started_at ? `Started ${new Date(p.started_at).toLocaleDateString()}` : ''}
-                        </span>
-                        {/* Quick actions appear ONLY on the current active stage so the user can advance/skip/reject right from the timeline card */}
-                        {isCurrent && (
-                          <div className="flex items-center gap-1 ml-1">
-                            <button
-                              onClick={() => skip.mutate()}
-                              disabled={skip.isPending}
-                              className="text-[11px] px-2 py-1 rounded-md text-slate-300 hover:text-slate-100 hover:bg-slate-800/60 border border-slate-700"
-                              title="Skip this stage"
-                            >
-                              Skip
-                            </button>
-                            <button
-                              onClick={() => reject.mutate()}
-                              disabled={reject.isPending}
-                              className="text-[11px] px-2 py-1 rounded-md text-rose-300 hover:text-rose-200 hover:bg-rose-500/10 border border-rose-500/30"
-                              title="Reject the candidate at this stage"
-                            >
-                              Reject
-                            </button>
-                            <button
-                              onClick={() => advance.mutate()}
-                              disabled={advance.isPending}
-                              className="text-[11px] px-2 py-1 rounded-md text-emerald-200 hover:text-emerald-100 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 inline-flex items-center gap-1"
-                              title="Advance to the next stage"
-                            >
-                              Advance <ArrowRight size={10} />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    {stageEnabledCfg?.what_to_expect && (
-                      <div className="text-xs text-slate-400 mt-1">{stageEnabledCfg.what_to_expect}</div>
-                    )}
-                    {/* Interviewer assignments + own feedback form */}
-                    {p.state !== 'skipped' && (
-                      <div className="mt-2.5 pt-2.5 border-t border-slate-800/60">
-                        <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1.5">Interviewers</div>
-                        <InterviewerAssignment pipelineId={p.id} />
-                        {myAssignedPipelines.has(p.id) && (
-                          <div className="mt-3 pt-3 border-t border-slate-800/60">
-                            <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-2">Your feedback</div>
-                            <FeedbackForm
-                              pipelineId={p.id}
-                              interviewerId={user.id}
-                              existing={myFeedbackByPipeline[p.id]}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-slate-200 font-medium">Pipeline</div>
+              <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                <span className="inline-flex items-center gap-1"><CircleDot size={10} className="text-indigo-300" />current</span>
+                <span className="inline-flex items-center gap-1"><Check size={10} className="text-emerald-300" />done</span>
+                <span className="inline-flex items-center gap-1"><Circle size={10} />upcoming</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {(pipeline || []).map((p) => (
+                <PipelineStageRow
+                  key={p.id}
+                  row={p}
+                  candidate={candidate}
+                  isTerminal={isTerminal}
+                  user={user}
+                  myAssignedPipelines={myAssignedPipelines}
+                  myFeedbackByPipeline={myFeedbackByPipeline}
+                  skip={skip}
+                  reject={reject}
+                  advance={advance}
+                />
+              ))}
             </div>
           </Card>
 
@@ -495,7 +376,7 @@ export default function CandidateDetailPage() {
         </div>
 
         {/* Sidebar */}
-        <div className="space-y-4">
+        <div className="space-y-4 min-w-0">
           <Card>
             <div className="text-slate-200 font-medium mb-3">Profile</div>
             <div className="space-y-2 text-sm">
@@ -592,12 +473,195 @@ export default function CandidateDetailPage() {
   );
 }
 
+function PipelineStageRow({
+  row, candidate, isTerminal, user, myAssignedPipelines, myFeedbackByPipeline,
+  skip, reject, advance,
+}) {
+  const stage = STAGE_BY_KEY[row.stage_key];
+  const isCurrent = row.stage_key === candidate.current_stage_key && !isTerminal;
+  const stageEnabledCfg = candidate.role?.stage_config?.find((c) => c.stage_key === row.stage_key);
+  // Current stage: expanded by default. The user can collapse explicitly.
+  const [open, setOpen] = useState(isCurrent);
+  // Re-sync when the active stage changes (e.g. after advance/skip).
+  useEffect(() => { setOpen(isCurrent); }, [isCurrent]);
+
+  const stateIcon = (() => {
+    if (row.state === 'passed')   return <Check size={13} className="text-emerald-300" />;
+    if (row.state === 'failed')   return <X size={13} className="text-rose-300" />;
+    if (row.state === 'skipped')  return <SkipForward size={13} className="text-slate-400" />;
+    if (row.state === 'in_progress') return <CircleDot size={13} className="text-indigo-300" />;
+    return <Circle size={13} className="text-slate-600" />;
+  })();
+
+  const dateLabel = row.completed_at
+    ? `Completed ${new Date(row.completed_at).toLocaleDateString()}`
+    : row.started_at
+    ? `Started ${new Date(row.started_at).toLocaleDateString()}`
+    : '';
+
+  const canExpand = row.state !== 'skipped';
+
+  return (
+    <div
+      className={`rounded-lg border transition ${
+        isCurrent
+          ? 'border-indigo-500/50 bg-indigo-500/5 ring-1 ring-indigo-500/20'
+          : 'border-slate-800 bg-slate-900/40'
+      }`}
+    >
+      {/* Header row - always visible. Click anywhere (except actions) to expand/collapse. */}
+      <button
+        type="button"
+        onClick={() => canExpand && setOpen((v) => !v)}
+        disabled={!canExpand}
+        className="w-full flex items-center gap-2 px-3 py-2 text-left"
+      >
+        <span className="shrink-0">{stateIcon}</span>
+        <span className={`text-sm font-medium ${isCurrent ? 'text-slate-50' : 'text-slate-200'}`}>
+          {stage?.label || row.stage_key}
+        </span>
+        {isCurrent && (
+          <span className="text-[10px] uppercase tracking-wide text-indigo-300 bg-indigo-500/15 border border-indigo-500/30 rounded-full px-1.5 py-0.5">
+            current
+          </span>
+        )}
+        <StageBadge stageKey={row.stage_key} state={row.state} size="sm" />
+        <span className="text-[11px] text-slate-500 ml-auto">{dateLabel}</span>
+        {canExpand && (
+          <ChevronRight
+            size={14}
+            className={`text-slate-500 transition-transform shrink-0 ${open ? 'rotate-90' : ''}`}
+          />
+        )}
+      </button>
+
+      {open && canExpand && (
+        <div className="px-3 pb-3 border-t border-slate-800/60">
+          {stageEnabledCfg?.what_to_expect && (
+            <div className="text-xs text-slate-400 pt-2.5">{stageEnabledCfg.what_to_expect}</div>
+          )}
+
+          {/* Quick actions for the current stage */}
+          {isCurrent && (
+            <div className="flex items-center gap-1.5 mt-2.5 flex-wrap">
+              <button
+                onClick={() => skip.mutate()}
+                disabled={skip.isPending}
+                className="text-[11px] px-2 py-1 rounded-md text-slate-300 hover:text-slate-100 hover:bg-slate-800/60 border border-slate-700"
+              >
+                Skip
+              </button>
+              <button
+                onClick={() => reject.mutate()}
+                disabled={reject.isPending}
+                className="text-[11px] px-2 py-1 rounded-md text-rose-300 hover:text-rose-200 hover:bg-rose-500/10 border border-rose-500/30"
+              >
+                Reject
+              </button>
+              <button
+                onClick={() => advance.mutate()}
+                disabled={advance.isPending}
+                className="text-[11px] px-2 py-1 rounded-md text-emerald-200 hover:text-emerald-100 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 inline-flex items-center gap-1"
+              >
+                Advance <ArrowRight size={10} />
+              </button>
+            </div>
+          )}
+
+          <div className="mt-3 pt-3 border-t border-slate-800/60">
+            <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1.5">Interviewers</div>
+            <InterviewerAssignment pipelineId={row.id} />
+            {myAssignedPipelines.has(row.id) && (
+              <FeedbackSection
+                pipelineId={row.id}
+                interviewerId={user.id}
+                existing={myFeedbackByPipeline[row.id]}
+              />
+            )}
+          </div>
+
+          {/* Per-stage discussion thread (separate from the candidate-level Comments card) */}
+          <div className="mt-3 pt-3 border-t border-slate-800/60">
+            <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-2 flex items-center gap-1.5">
+              <MessageSquare size={11} /> Stage discussion
+            </div>
+            <CommentThread entityType="pipeline" entityId={row.id} compact />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const RECOMMENDATION_LABEL = {
+  strong_hire: 'Strong Hire',
+  hire: 'Hire',
+  no_hire: 'No Hire',
+  strong_no_hire: 'Strong No Hire',
+};
+const RECOMMENDATION_TONE = {
+  strong_hire: 'text-emerald-200',
+  hire: 'text-emerald-300',
+  no_hire: 'text-rose-300',
+  strong_no_hire: 'text-rose-200',
+};
+
+function FeedbackSection({ pipelineId, interviewerId, existing }) {
+  // Default: closed if feedback already exists (just show summary); open if not (work to do).
+  const [open, setOpen] = useState(!existing);
+  // Re-sync when an existing record materialises (e.g. submission completes).
+  useEffect(() => { setOpen(!existing); }, [existing?.id]);
+
+  const submittedLabel = existing?.submitted_at
+    ? new Date(existing.submitted_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+    : null;
+  const recLabel = existing ? RECOMMENDATION_LABEL[existing.recommendation] || existing.recommendation : null;
+  const recTone = existing ? RECOMMENDATION_TONE[existing.recommendation] || 'text-slate-200' : 'text-slate-200';
+
+  return (
+    <div className="mt-3 pt-3 border-t border-slate-800/60">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2 text-left"
+      >
+        <span className="text-[11px] uppercase tracking-wide text-slate-500">Your feedback</span>
+        {existing ? (
+          <span className="flex items-center gap-1.5 text-xs ml-1">
+            <Check size={11} className="text-emerald-300" />
+            <span className={recTone + ' font-medium'}>{recLabel}</span>
+            {typeof existing.rating === 'number' && existing.rating > 0 && (
+              <span className="text-slate-500">- {existing.rating}/5</span>
+            )}
+            {submittedLabel && <span className="text-slate-500">- {submittedLabel}</span>}
+          </span>
+        ) : (
+          <span className="text-xs text-amber-300 ml-1">Pending</span>
+        )}
+        <ChevronRight
+          size={13}
+          className={`text-slate-500 ml-auto transition-transform ${open ? 'rotate-90' : ''}`}
+        />
+      </button>
+      {open && (
+        <div className="mt-2.5">
+          <FeedbackForm
+            pipelineId={pipelineId}
+            interviewerId={interviewerId}
+            existing={existing}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AIEvaluation({ ai }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2">
-          <span className="text-3xl font-bold text-slate-100">{ai.overallScore ?? '—'}</span>
+          <span className="text-3xl font-bold text-slate-100">{ai.overallScore ?? '-'}</span>
           <span className="text-xs text-slate-500">/ 100 overall</span>
         </div>
         <RecommendationBadge value={ai.recommendation} />
@@ -627,7 +691,7 @@ function AIEvaluation({ ai }) {
       </div>
       {ai.extractedInfo && (
         <div className="text-[11px] text-slate-500 pt-2 border-t border-slate-800">
-          Extracted: {ai.extractedInfo.experience} yrs · {ai.extractedInfo.education} · {ai.extractedInfo.location || '—'}
+          Extracted: {ai.extractedInfo.experience} yrs · {ai.extractedInfo.education} · {ai.extractedInfo.location || '-'}
           {Array.isArray(ai.extractedInfo.keySkills) && ai.extractedInfo.keySkills.length > 0 && (
             <> · {ai.extractedInfo.keySkills.slice(0, 8).join(', ')}</>
           )}
@@ -682,4 +746,163 @@ function Section({ title, items, tone = 'slate' }) {
       </ul>
     </div>
   );
+}
+
+// ─── HTML export ─────────────────────────────────────────────────────────
+// Builds a self-contained "candidate brief" file for sharing outside Slate.
+// Fetches all feedback rows on click so the export captures the full record.
+
+async function exportCandidateHtml({ candidate, pipeline }) {
+  if (!candidate) return;
+  try {
+    const pipelineIds = (pipeline || []).map((p) => p.id);
+    let feedback = [];
+    if (pipelineIds.length) {
+      const { data } = await supabase
+        .from('feedback')
+        .select(`
+          id, pipeline_id, recommendation, rating, body_html, submitted_at,
+          interviewer:profiles!feedback_interviewer_id_fkey ( id, full_name, email )
+        `)
+        .in('pipeline_id', pipelineIds)
+        .order('submitted_at', { ascending: true });
+      feedback = data || [];
+    }
+
+    const html = renderHtmlDocument({
+      title: `Slate - ${candidate.full_name || 'Candidate'}`,
+      header: {
+        eyebrow: 'Slate · Candidate brief',
+        title: candidate.full_name || 'Unnamed candidate',
+        subtitle: [
+          candidate.role?.title,
+          candidate.role?.project?.name,
+          `Status: ${candidate.status}`,
+        ].filter(Boolean).join(' · '),
+      },
+      body: buildCandidateHtmlBody(candidate, pipeline || [], feedback),
+    });
+    downloadHtmlFile(html, `slate-candidate-${(candidate.full_name || 'unnamed').toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.html`);
+    toast.success('Candidate report downloaded');
+  } catch (e) {
+    toast.error(e.message || 'Failed to build report');
+  }
+}
+
+const REC_LABEL = {
+  strong_hire: 'Strong Hire',
+  hire: 'Hire',
+  no_hire: 'No Hire',
+  strong_no_hire: 'Strong No Hire',
+};
+const REC_CLASS = {
+  strong_hire: 'rec--hire',
+  hire: 'rec--hire',
+  no_hire: 'rec--reject',
+  strong_no_hire: 'rec--reject',
+};
+
+function buildCandidateHtmlBody(candidate, pipeline, feedback) {
+  const ai = candidate.ai_analysis || null;
+
+  // Profile meta panel
+  const meta = `
+    <div class="panel">
+      <div class="panel__title">Profile</div>
+      <dl class="meta-grid">
+        ${candidate.email ? `<dt>Email</dt><dd><a href="mailto:${esc(candidate.email)}">${esc(candidate.email)}</a></dd>` : ''}
+        ${candidate.phone ? `<dt>Phone</dt><dd>${esc(candidate.phone)}</dd>` : ''}
+        ${candidate.linkedin_url ? `<dt>LinkedIn</dt><dd><a href="${esc(candidate.linkedin_url)}">${esc(candidate.linkedin_url)}</a></dd>` : ''}
+        <dt>Role</dt><dd>${esc(candidate.role?.title || '-')}</dd>
+        <dt>Project</dt><dd>${esc(candidate.role?.project?.name || '-')}</dd>
+        <dt>Current stage</dt><dd>${esc(STAGE_BY_KEY[candidate.current_stage_key]?.label || candidate.current_stage_key || '-')}</dd>
+        <dt>Status</dt><dd>${esc(candidate.status)}</dd>
+        <dt>Source</dt><dd>${esc(candidate.source || '-')}</dd>
+        <dt>Added</dt><dd>${esc(new Date(candidate.created_at).toLocaleDateString())}</dd>
+        ${(candidate.tags || []).length ? `<dt>Tags</dt><dd>${(candidate.tags || []).map((t) => `<span class="pill pill--indigo">${esc(t)}</span>`).join(' ')}</dd>` : ''}
+        ${typeof candidate.ai_score === 'number' ? `<dt>AI score</dt><dd><strong>${candidate.ai_score}</strong> / 100${ai?.recommendation ? ` · ${esc(ai.recommendation)}` : ''}</dd>` : ''}
+      </dl>
+    </div>`;
+
+  // AI evaluation
+  const aiBlock = !ai ? '' : `
+    <div class="panel">
+      <div class="panel__title">AI evaluation</div>
+      ${ai.summary ? `<p>${esc(ai.summary)}</p>` : ''}
+      ${ai.detailedAnalysis ? `<p>${esc(ai.detailedAnalysis)}</p>` : ''}
+      <div class="grid-2">
+        ${Array.isArray(ai.selectionReasons) && ai.selectionReasons.length ? `<div><h3>Why hire</h3><ul>${ai.selectionReasons.map((s) => `<li>${esc(s)}</li>`).join('')}</ul></div>` : ''}
+        ${Array.isArray(ai.rejectionReasons) && ai.rejectionReasons.length ? `<div><h3>Why not</h3><ul>${ai.rejectionReasons.map((s) => `<li>${esc(s)}</li>`).join('')}</ul></div>` : ''}
+        ${Array.isArray(ai.strengths) && ai.strengths.length ? `<div><h3>Strengths</h3><ul>${ai.strengths.map((s) => `<li>${esc(s)}</li>`).join('')}</ul></div>` : ''}
+        ${Array.isArray(ai.weaknesses) && ai.weaknesses.length ? `<div><h3>Weaknesses</h3><ul>${ai.weaknesses.map((s) => `<li>${esc(s)}</li>`).join('')}</ul></div>` : ''}
+      </div>
+    </div>`;
+
+  // Pipeline timeline
+  const stateLabel = { in_progress: 'In progress', passed: 'Passed', failed: 'Rejected', skipped: 'Skipped', pending: 'Pending' };
+  const stateClass = { in_progress: 'pill--indigo', passed: 'pill--emerald', failed: 'pill--rose', skipped: 'pill--violet', pending: '' };
+  const pipelineRows = pipeline
+    .slice()
+    .sort((a, b) => (a.stage_order || 0) - (b.stage_order || 0))
+    .map((p) => `
+      <tr>
+        <td>${esc(STAGE_BY_KEY[p.stage_key]?.label || p.stage_key)}</td>
+        <td><span class="pill ${stateClass[p.state] || ''}">${esc(stateLabel[p.state] || p.state)}</span></td>
+        <td class="num">${p.started_at ? esc(new Date(p.started_at).toLocaleDateString()) : '-'}</td>
+        <td class="num">${p.completed_at ? esc(new Date(p.completed_at).toLocaleDateString()) : '-'}</td>
+      </tr>`).join('');
+  const pipelineBlock = `
+    <div class="panel">
+      <div class="panel__title">Pipeline timeline</div>
+      <table>
+        <thead>
+          <tr><th>Stage</th><th>State</th><th class="num">Started</th><th class="num">Completed</th></tr>
+        </thead>
+        <tbody>${pipelineRows}</tbody>
+      </table>
+    </div>`;
+
+  // Feedback grouped by stage
+  const fbByPipeline = feedback.reduce((acc, f) => {
+    (acc[f.pipeline_id] = acc[f.pipeline_id] || []).push(f);
+    return acc;
+  }, {});
+  const stagesWithFeedback = pipeline.filter((p) => fbByPipeline[p.id]?.length);
+  const fbBlock = stagesWithFeedback.length === 0 ? `
+    <div class="panel">
+      <div class="panel__title">Interviewer feedback</div>
+      <div class="muted">No feedback submitted yet.</div>
+    </div>` : `
+    <div class="panel">
+      <div class="panel__title">Interviewer feedback</div>
+      ${stagesWithFeedback.map((p) => `
+        <h2>${esc(STAGE_BY_KEY[p.stage_key]?.label || p.stage_key)}</h2>
+        ${fbByPipeline[p.id].map((f) => `
+          <div style="margin: 0.6em 0; padding-bottom: 0.6em; border-bottom: 1px solid rgba(148,163,184,0.12);">
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+              <strong>${esc(f.interviewer?.full_name || f.interviewer?.email || 'Unknown')}</strong>
+              ${f.recommendation ? `<span class="pill ${REC_CLASS[f.recommendation] || ''}">${esc(REC_LABEL[f.recommendation] || f.recommendation)}</span>` : ''}
+              ${typeof f.rating === 'number' && f.rating > 0 ? `<span class="pill pill--amber">${f.rating}/5</span>` : ''}
+              <span class="generated" style="margin-left:auto;">${f.submitted_at ? esc(new Date(f.submitted_at).toLocaleDateString()) : ''}</span>
+            </div>
+            ${f.body_html ? `<div style="margin-top:0.4em;">${sanitizeHtml(f.body_html)}</div>` : ''}
+          </div>`).join('')}
+      `).join('')}
+    </div>`;
+
+  // Committee brief if AI synthesised one
+  const brief = ai?.committee_brief;
+  const briefBlock = !brief ? '' : `
+    <div class="panel">
+      <div class="panel__title">AI committee brief</div>
+      ${brief.headline ? `<p><strong>${esc(brief.headline)}</strong></p>` : ''}
+      ${brief.recommendation ? `<p>${esc(brief.recommendation)}</p>` : ''}
+      <div class="grid-2">
+        ${Array.isArray(brief.strengths) && brief.strengths.length ? `<div><h3>Strengths</h3><ul>${brief.strengths.map((s) => `<li>${esc(s)}</li>`).join('')}</ul></div>` : ''}
+        ${Array.isArray(brief.concerns) && brief.concerns.length ? `<div><h3>Concerns</h3><ul>${brief.concerns.map((s) => `<li>${esc(s)}</li>`).join('')}</ul></div>` : ''}
+      </div>
+      ${brief.divergence ? `<p class="muted">Divergence: ${esc(brief.divergence)}</p>` : ''}
+    </div>`;
+
+  return [meta, aiBlock, pipelineBlock, fbBlock, briefBlock].filter(Boolean).join('\n');
 }

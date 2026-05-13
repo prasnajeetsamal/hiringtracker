@@ -2,8 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import {
-  FileBarChart, Download, Printer, Share2, Users, UserCheck, UserX,
-  Clock, Sparkles, FolderKanban, Briefcase, TrendingUp, Calendar,
+  FileBarChart, Share2, Users, UserCheck, UserX,
+  Clock, Sparkles, FolderKanban, Briefcase, TrendingUp, Calendar, FileDown,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -11,18 +11,19 @@ import PageHeader from '../components/common/PageHeader.jsx';
 import Card from '../components/common/Card.jsx';
 import Button from '../components/common/Button.jsx';
 import Spinner from '../components/common/Spinner.jsx';
+import Modal from '../components/common/Modal.jsx';
 import EmptyState from '../components/common/EmptyState.jsx';
 import FilterBar, { FilterSelect } from '../components/common/FilterBar.jsx';
 import StageBreakdown from '../components/reports/StageBreakdown.jsx';
-import ScoreHistogram from '../components/reports/ScoreHistogram.jsx';
 import RecommendationBadge from '../components/candidates/RecommendationBadge.jsx';
 import { supabase } from '../lib/supabase.js';
 import { STAGES, STAGE_BY_KEY } from '../lib/pipeline.js';
+import { renderHtmlDocument, downloadHtmlFile, esc } from '../lib/htmlExport.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function fmtDuration(ms) {
-  if (!isFinite(ms) || ms <= 0) return '—';
+  if (!isFinite(ms) || ms <= 0) return '-';
   const days = ms / DAY_MS;
   if (days < 1) {
     const hours = ms / (60 * 60 * 1000);
@@ -226,6 +227,13 @@ export default function ReportsPage() {
   const [projectFilter, setProjectFilter] = useState(searchParams.get('projectId') || '');
   const [roleFilter, setRoleFilter] = useState(searchParams.get('roleId') || '');
 
+  // Export modal: pick which sections + which destination.
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportSections, setExportSections] = useState({
+    kpis: true, stages: true, times: true, sources: true, topscorers: true,
+  });
+  const [exportBusy, setExportBusy] = useState(false);
+
   // Keep query string in sync so the URL is shareable.
   useEffect(() => {
     const next = {};
@@ -285,7 +293,7 @@ export default function ReportsPage() {
         data.failedByStage[s.key] || 0,
         data.skippedByStage[s.key] || 0,
         data.reachedByStage[s.key] || 0,
-        data.conversionByStage[s.key] != null ? `${data.conversionByStage[s.key]}%` : '—',
+        data.conversionByStage[s.key] != null ? `${data.conversionByStage[s.key]}%` : '-',
         fmtDuration(data.stageMedians[s.key]),
       ]);
     });
@@ -309,6 +317,66 @@ export default function ReportsPage() {
     a.click();
     URL.revokeObjectURL(url);
     toast.success('Report CSV downloaded');
+  };
+
+  const downloadHtml = (sections = exportSections) => {
+    if (!data) return;
+    const k = data.kpis;
+    const conv = k.total ? Math.round((k.hired / k.total) * 100) : 0;
+    const rejectionRate = k.total ? Math.round((k.rejected / k.total) * 100) : 0;
+    const scopeTitle = data.scope.projectName && data.scope.roleName
+      ? `${data.scope.roleName} - ${data.scope.projectName}`
+      : data.scope.projectName || 'All projects · all roles';
+    const html = renderHtmlDocument({
+      title: 'Slate - Hiring Report',
+      header: {
+        eyebrow: 'Slate · Hiring Reports',
+        title: scopeTitle,
+        subtitle: `${k.total} candidates considered · ${conv}% hired · ${rejectionRate}% rejected`,
+      },
+      body: buildHtmlReport(data, sections),
+    });
+    downloadHtmlFile(html, `slate-hiring-report-${new Date().toISOString().slice(0, 10)}.html`);
+    toast.success('HTML report downloaded');
+  };
+
+  // Pixel-perfect PDF via html2canvas + jsPDF. Lazy-loads the helper so the
+  // heavy deps don't bloat first paint.
+  const downloadPdf = async (sections = exportSections) => {
+    if (!data) return;
+    const el = document.getElementById('report-printable');
+    if (!el) { toast.error('Report not yet rendered'); return; }
+    const omitted = Object.entries(sections).filter(([, v]) => !v).map(([k2]) => `[data-section="${k2}"]`).join(', ');
+    const filename = `slate-hiring-report-${new Date().toISOString().slice(0, 10)}.pdf`;
+    setExportBusy(true);
+    const t = toast.loading('Rendering PDF...');
+    try {
+      const mod = await import('../lib/pdfExport.js');
+      await mod.exportElementToPdf(el, {
+        filename,
+        backgroundColor: '#050816',
+        scale: 2,
+        hideSelector: omitted || null,
+      });
+      toast.success('PDF downloaded', { id: t });
+    } catch (e) {
+      toast.error(e.message || 'PDF render failed', { id: t });
+    } finally {
+      setExportBusy(false);
+    }
+  };
+
+  const printWithSections = (sections = exportSections) => {
+    if (!data) return;
+    // Temporarily hide deselected sections, run the browser print, then restore.
+    const toHide = Object.entries(sections).filter(([, v]) => !v).map(([k2]) => k2);
+    const nodes = toHide.flatMap((s) => Array.from(document.querySelectorAll(`[data-section="${s}"]`)));
+    const prev = nodes.map((n) => ({ n, v: n.style.display }));
+    nodes.forEach((n) => { n.style.display = 'none'; });
+    setTimeout(() => {
+      window.print();
+      prev.forEach(({ n, v }) => { n.style.display = v || ''; });
+    }, 50);
   };
 
   const copyShareLink = async () => {
@@ -335,8 +403,7 @@ export default function ReportsPage() {
         actions={
           <>
             <Button variant="secondary" icon={Share2} onClick={copyShareLink}>Share link</Button>
-            <Button variant="secondary" icon={Printer} onClick={() => window.print()}>Print / PDF</Button>
-            <Button icon={Download} onClick={downloadCsv} disabled={empty}>Export CSV</Button>
+            <Button icon={FileDown} onClick={() => setExportOpen(true)} disabled={empty}>Export</Button>
           </>
         }
       />
@@ -366,7 +433,7 @@ export default function ReportsPage() {
               const pName = (data?.projects || []).find((p) => p.id === r.project_id)?.name;
               return {
                 value: r.id,
-                label: !projectFilter && pName ? `${r.title} — ${pName}` : r.title,
+                label: !projectFilter && pName ? `${r.title} - ${pName}` : r.title,
               };
             }),
           ]}
@@ -385,8 +452,8 @@ export default function ReportsPage() {
           description="Add candidates to a role (or pick different filters above) to populate this report."
         />
       ) : (
-        <div className="space-y-4">
-          {/* Header summary */}
+        <div id="report-printable" className="space-y-4">
+          {/* Header summary - always included in exports */}
           <Card>
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div>
@@ -395,7 +462,7 @@ export default function ReportsPage() {
                 </div>
                 <h2 className="text-lg font-semibold text-slate-100">
                   {data.scope.projectName && data.scope.roleName
-                    ? `${data.scope.roleName} — ${data.scope.projectName}`
+                    ? `${data.scope.roleName} - ${data.scope.projectName}`
                     : data.scope.projectName
                     ? `${data.scope.projectName}`
                     : 'All projects · all roles'}
@@ -408,7 +475,7 @@ export default function ReportsPage() {
           </Card>
 
           {/* KPI grid */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 auto-rows-fr">
+          <div data-section="kpis" className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 auto-rows-fr">
             <StatCard icon={Users} label="Considered" value={k.total} hint="All-time" />
             <StatCard icon={TrendingUp} label="Active" value={k.active} hint="In flight" tone="indigo" />
             <StatCard icon={UserCheck} label="Hired" value={k.hired} hint={`${conversion}% conversion`} tone="emerald" />
@@ -417,42 +484,27 @@ export default function ReportsPage() {
               hint={data.timeToHire.length ? `${data.timeToHire.length} hires` : 'No hires yet'} tone="violet" />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Stage breakdown */}
-            <Card className="lg:col-span-2">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2 text-slate-200">
-                  <FileBarChart size={16} className="text-indigo-300" />
-                  <span className="font-medium">Pipeline breakdown</span>
-                </div>
-                <div className="text-[11px] text-slate-500">All-time</div>
+          {/* Stage breakdown */}
+          <div data-section="stages">
+          <Card>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2 text-slate-200">
+                <FileBarChart size={16} className="text-indigo-300" />
+                <span className="font-medium">Pipeline breakdown</span>
               </div>
-              <StageBreakdown
-                active={data.activeByStage}
-                passed={data.passedByStage}
-                failed={data.failedByStage}
-                skipped={data.skippedByStage}
-              />
-            </Card>
-
-            {/* AI score distribution */}
-            <Card>
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2 text-slate-200">
-                  <Sparkles size={16} className="text-amber-300" />
-                  <span className="font-medium">AI score distribution</span>
-                </div>
-                <div className="text-[11px] text-slate-500">{data.scores.length} scored</div>
-              </div>
-              {data.scores.length === 0 ? (
-                <div className="text-sm text-slate-500 italic py-4">No candidates have been AI-scored yet.</div>
-              ) : (
-                <ScoreHistogram scores={data.scores} />
-              )}
-            </Card>
+              <div className="text-[11px] text-slate-500">All-time</div>
+            </div>
+            <StageBreakdown
+              active={data.activeByStage}
+              passed={data.passedByStage}
+              failed={data.failedByStage}
+              skipped={data.skippedByStage}
+            />
+          </Card>
           </div>
 
           {/* Time + per-stage table */}
+          <div data-section="times">
           <Card>
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2 text-slate-200">
@@ -479,7 +531,7 @@ export default function ReportsPage() {
                       <td className="py-2 pr-4 text-slate-200">{s.label}</td>
                       <td className="py-2 px-2 text-right tabular-nums text-slate-300">{data.reachedByStage[s.key] || 0}</td>
                       <td className="py-2 px-2 text-right tabular-nums text-slate-300">
-                        {data.conversionByStage[s.key] != null ? `${data.conversionByStage[s.key]}%` : '—'}
+                        {data.conversionByStage[s.key] != null ? `${data.conversionByStage[s.key]}%` : '-'}
                       </td>
                       <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtDuration(data.stageMedians[s.key])}</td>
                       <td className="py-2 px-2 text-right tabular-nums text-slate-300">{fmtDuration(data.stageAverages[s.key])}</td>
@@ -490,9 +542,11 @@ export default function ReportsPage() {
               </table>
             </div>
           </Card>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Source breakdown */}
+            <div data-section="sources">
             <Card>
               <div className="flex items-center gap-2 text-slate-200 mb-3">
                 <Users size={16} className="text-indigo-300" />
@@ -522,8 +576,10 @@ export default function ReportsPage() {
                 </div>
               )}
             </Card>
+            </div>
 
             {/* Top scorers */}
+            <div data-section="topscorers">
             <Card>
               <div className="flex items-center gap-2 text-slate-200 mb-3">
                 <Sparkles size={16} className="text-amber-300" />
@@ -554,18 +610,231 @@ export default function ReportsPage() {
                 </div>
               )}
             </Card>
+            </div>
           </div>
 
-          <Card>
+          <Card className="no-print">
             <div className="text-xs text-slate-400">
-              Want this report sent to someone? Click <strong className="text-slate-200">Share link</strong> to copy
-              the URL with the current filters baked in. They'll see the same view (subject to their permissions).
-              Click <strong className="text-slate-200">Print / PDF</strong> to use your browser's "Save as PDF"
-              option — page layout is optimised for printing.
+              Click <strong className="text-slate-200">Export</strong> to download as PDF (pixel-perfect, colours preserved),
+              HTML (self-contained file, viewable without Slate login), or send to the printer. Choose which sections to
+              include via the chart picker. <strong className="text-slate-200">Share link</strong> copies the URL with
+              current filters baked in.
             </div>
           </Card>
         </div>
       )}
+
+      <ExportOptionsModal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        sections={exportSections}
+        onSectionsChange={setExportSections}
+        busy={exportBusy}
+        onPdf={() => { downloadPdf(exportSections); setExportOpen(false); }}
+        onHtml={() => { downloadHtml(exportSections); setExportOpen(false); }}
+        onPrint={() => { printWithSections(exportSections); setExportOpen(false); }}
+        onCsv={() => { downloadCsv(); setExportOpen(false); }}
+      />
     </>
+  );
+}
+
+// ─── Report body sections (CSS lives in src/lib/htmlExport.js) ─────────
+
+const ALL_SECTIONS = { kpis: true, stages: true, times: true, sources: true, topscorers: true };
+
+function buildHtmlReport(data, sections = ALL_SECTIONS) {
+  const on = (k) => sections[k] !== false;
+  const k = data.kpis;
+  const conv = k.total ? Math.round((k.hired / k.total) * 100) : 0;
+
+  const kpiCard = (label, value, hint, tone) => `
+    <div class="kpi kpi--${tone}">
+      <div class="kpi__label">${esc(label)}</div>
+      <div class="kpi__value">${esc(value)}</div>
+      ${hint ? `<div class="kpi__hint">${esc(hint)}</div>` : ''}
+    </div>`;
+
+  // Stage breakdown - gradient bars per stage
+  const stageRows = STAGES.map((s) => {
+    const reached = data.reachedByStage[s.key] || 0;
+    const active = data.activeByStage[s.key] || 0;
+    const passed = data.passedByStage[s.key] || 0;
+    const failed = data.failedByStage[s.key] || 0;
+    const skipped = data.skippedByStage[s.key] || 0;
+    const total = Math.max(1, active + passed + failed + skipped);
+    const seg = (count, color) => count > 0
+      ? `<span class="seg" style="width:${(count / total) * 100}%;background:${color};" title="${count}"></span>`
+      : '';
+    return `
+      <div class="stage">
+        <div class="stage__label">${esc(s.label)}</div>
+        <div class="stage__bar">
+          ${seg(active, '#6366f1')}
+          ${seg(passed, '#10b981')}
+          ${seg(failed, '#f43f5e')}
+          ${seg(skipped, '#94a3b8')}
+        </div>
+        <div class="stage__counts">
+          <span class="dot dot--indigo"></span>${active}
+          <span class="dot dot--emerald"></span>${passed}
+          <span class="dot dot--rose"></span>${failed}
+          <span class="dot dot--slate"></span>${skipped}
+          <span class="stage__reached">reached ${reached}</span>
+        </div>
+      </div>`;
+  }).join('');
+
+  // Time-at-stage table
+  const timeRows = STAGES.map((s) => `
+    <tr>
+      <td>${esc(s.label)}</td>
+      <td class="num">${data.reachedByStage[s.key] || 0}</td>
+      <td class="num">${data.conversionByStage[s.key] != null ? data.conversionByStage[s.key] + '%' : '-'}</td>
+      <td class="num">${esc(fmtDuration(data.stageMedians[s.key]))}</td>
+      <td class="num">${esc(fmtDuration(data.stageAverages[s.key]))}</td>
+      <td class="num rose">${data.rejectedByStage[s.key] || 0}</td>
+    </tr>`).join('');
+
+  // Source breakdown bars
+  const totalForPct = k.total || 1;
+  const sourceRows = Object.entries(data.bySource)
+    .sort((a, b) => b[1] - a[1])
+    .map(([src, count]) => `
+      <div class="source-row">
+        <div class="source-row__label">${esc(src)}</div>
+        <div class="source-row__bar"><span style="width:${(count / totalForPct) * 100}%"></span></div>
+        <div class="source-row__count">${count}</div>
+      </div>`).join('');
+
+  // Top scorers
+  const topRows = data.topCandidates.length === 0
+    ? '<div class="muted">No active candidates have been scored yet.</div>'
+    : data.topCandidates.map((c) => `
+        <div class="top-row">
+          <div class="top-row__score">${c.ai_score}</div>
+          <div class="top-row__main">
+            <div class="top-row__name">${esc(c.full_name || 'Unnamed')}</div>
+            <div class="top-row__sub">${esc(c.role?.title || '')} · ${esc(STAGE_BY_KEY[c.current_stage_key]?.short || c.current_stage_key)}</div>
+          </div>
+          <div class="top-row__rec rec--${esc((c.ai_analysis?.recommendation || '').toLowerCase())}">
+            ${esc(c.ai_analysis?.recommendation || '')}
+          </div>
+        </div>`).join('');
+
+  const kpiBlock = !on('kpis') ? '' : `
+    <div class="kpis">
+      ${kpiCard('Considered', k.total, 'All-time', 'indigo')}
+      ${kpiCard('Active', k.active, 'In flight', 'indigo')}
+      ${kpiCard('Hired', k.hired, conv + '% conversion', 'emerald')}
+      ${kpiCard('Rejected', k.rejected, (k.total ? Math.round((k.rejected / k.total) * 100) : 0) + '% rejection rate', 'rose')}
+      ${kpiCard('Median time-to-hire', fmtDuration(median(data.timeToHire)),
+                data.timeToHire.length ? data.timeToHire.length + ' hires' : 'No hires yet', 'violet')}
+    </div>`;
+
+  const stagesBlock = !on('stages') ? '' : `
+    <div class="panel">
+      <div class="panel__title">Pipeline breakdown</div>
+      ${stageRows}
+    </div>`;
+
+  const timesBlock = !on('times') ? '' : `
+    <div class="panel">
+      <div class="panel__title">Time spent at each stage</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Stage</th>
+            <th class="num">Reached</th>
+            <th class="num">Pass-through %</th>
+            <th class="num">Median time</th>
+            <th class="num">Avg time</th>
+            <th class="num">Rejected here</th>
+          </tr>
+        </thead>
+        <tbody>${timeRows}</tbody>
+      </table>
+    </div>`;
+
+  const bottomBlock = (!on('sources') && !on('topscorers')) ? '' : `
+    <div class="grid-2">
+      ${on('sources') ? `
+      <div class="panel">
+        <div class="panel__title">Where candidates came from</div>
+        ${sourceRows || '<div class="muted">No data.</div>'}
+      </div>` : ''}
+      ${on('topscorers') ? `
+      <div class="panel">
+        <div class="panel__title">Top candidates by AI score</div>
+        ${topRows}
+      </div>` : ''}
+    </div>`;
+
+  return [kpiBlock, stagesBlock, timesBlock, bottomBlock].filter(Boolean).join('\n');
+}
+
+// ─── Chart-picker modal ──────────────────────────────────────────────────
+
+const EXPORT_SECTION_OPTIONS = [
+  { key: 'kpis',       label: 'KPI summary' },
+  { key: 'stages',     label: 'Pipeline breakdown' },
+  { key: 'times',      label: 'Time per stage' },
+  { key: 'sources',    label: 'Source breakdown' },
+  { key: 'topscorers', label: 'Top scorers' },
+];
+
+function ExportOptionsModal({ open, onClose, sections, onSectionsChange, onPdf, onHtml, onPrint, onCsv, busy }) {
+  const toggle = (k) => onSectionsChange({ ...sections, [k]: !sections[k] });
+  const allOn = EXPORT_SECTION_OPTIONS.every((s) => sections[s.key]);
+  const noneOn = EXPORT_SECTION_OPTIONS.every((s) => !sections[s.key]);
+
+  return (
+    <Modal open={open} onClose={onClose} title="Export report" size="md"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="secondary" onClick={onCsv}>CSV (raw)</Button>
+          <Button variant="secondary" onClick={onPrint} disabled={noneOn}>Print</Button>
+          <Button variant="secondary" onClick={onHtml} disabled={noneOn}>HTML</Button>
+          <Button onClick={onPdf} loading={busy} disabled={noneOn}>PDF</Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <div className="text-xs text-slate-400">
+          Choose which sections to include in the export. PDF preserves on-screen colours pixel-for-pixel; HTML is a self-contained file you can email; Print opens the browser print dialog with the same colours.
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] uppercase tracking-wide text-slate-500">Sections</span>
+          <button
+            type="button"
+            onClick={() => onSectionsChange(
+              allOn
+                ? Object.fromEntries(EXPORT_SECTION_OPTIONS.map((s) => [s.key, false]))
+                : Object.fromEntries(EXPORT_SECTION_OPTIONS.map((s) => [s.key, true]))
+            )}
+            className="text-[11px] text-indigo-300 hover:text-indigo-200"
+          >
+            {allOn ? 'Deselect all' : 'Select all'}
+          </button>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {EXPORT_SECTION_OPTIONS.map((s) => (
+            <label key={s.key} className="flex items-center gap-2 p-2 rounded-lg border border-slate-800 hover:border-slate-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!!sections[s.key]}
+                onChange={() => toggle(s.key)}
+                className="w-4 h-4 accent-indigo-500"
+              />
+              <span className="text-sm text-slate-200">{s.label}</span>
+            </label>
+          ))}
+        </div>
+        <div className="text-[11px] text-slate-500 pt-1">
+          The header summary (project / role / hired %) is always included.
+        </div>
+      </div>
+    </Modal>
   );
 }

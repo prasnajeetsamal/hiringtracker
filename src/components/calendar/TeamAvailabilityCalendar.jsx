@@ -16,7 +16,7 @@ const localizer = dateFnsLocalizer({
   locales,
 });
 
-// Stable color palette — index by interviewer order in the legend.
+// Stable color palette - index by interviewer order in the legend.
 const PALETTE = [
   '#6366f1', '#a855f7', '#ec4899', '#f97316', '#eab308',
   '#22c55e', '#14b8a6', '#0ea5e9', '#8b5cf6', '#f43f5e',
@@ -59,7 +59,7 @@ export default function TeamAvailabilityCalendar() {
     },
   });
 
-  // People who actually have at least one slot in the window — the legend.
+  // People who actually have at least one slot in the window - the legend.
   const interviewerOrder = useMemo(() => {
     const ids = [...new Set((slots || []).map((s) => s.interviewer_id))];
     const peopleById = Object.fromEntries((people || []).map((p) => [p.id, p]));

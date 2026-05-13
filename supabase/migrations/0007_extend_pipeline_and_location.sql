@@ -1,16 +1,16 @@
 -- 0007_extend_pipeline_and_location.sql
 -- Two unrelated additions bundled into one migration:
 --
--- A) Pipeline stages — add `joined_fractal` and `rejected_offer` after the
+-- A) Pipeline stages - add `joined_fractal` and `rejected_offer` after the
 --    existing `offer` stage. The 7-stage pipeline becomes 9 stages.
--- B) Role location refactor — break `roles.location` (free text) into
+-- B) Role location refactor - break `roles.location` (free text) into
 --    structured `work_mode` + `city` + `state` + `country` columns.
 --    Existing `location` stays as a deprecated free-text field for back-
 --    compat; new code reads/writes the structured fields.
 
 -- ─── A. Pipeline stages ──────────────────────────────────────────────
 
--- 1) Update the candidates.current_stage_key check (none today — column has no
+-- 1) Update the candidates.current_stage_key check (none today - column has no
 --    explicit constraint, only a default). Pipeline stage_key has none either.
 --    The trigger that auto-creates pipeline rows defaults to a hard-coded list,
 --    so we only need to update the trigger.
@@ -103,7 +103,7 @@ alter table public.roles
   add column if not exists country text;
 
 -- Best-effort backfill of city from the legacy `location` text. We do
--- nothing fancy — copy the trimmed string into city if it's set and city
+-- nothing fancy - copy the trimmed string into city if it's set and city
 -- is null. Users will refine via the UI.
 update public.roles
   set city = trim(location)

@@ -19,7 +19,7 @@ export default function CalendarPage() {
         subtitle={
           tab === 'mine'
             ? 'Drag a time block to mark yourself available. Hiring teams use these slots when scheduling interviews.'
-            : 'Everyone\'s availability — filter by interviewer to find a common slot.'
+            : 'Everyone\'s availability - filter by interviewer to find a common slot.'
         }
       />
       <div className="flex rounded-lg bg-slate-800/60 p-0.5 text-sm border border-slate-700 mb-4 max-w-md">

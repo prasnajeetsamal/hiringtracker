@@ -13,6 +13,7 @@ import {
   Sparkles,
   UserCog,
   FileBarChart,
+  Clock,
 } from 'lucide-react';
 
 import { supabase } from '../../lib/supabase.js';
@@ -20,8 +21,8 @@ import { useAuth } from '../../lib/AuthContext.jsx';
 import UserMenu from './UserMenu.jsx';
 
 // Sidebar pages grouped into two sections.
-//   - "Hiring" — the pipeline-oriented day-to-day work
-//   - "Tools" — supporting features (your calendar, your interviews, library)
+//   - "Hiring" - the pipeline-oriented day-to-day work
+//   - "Tools" - supporting features (your calendar, your interviews, library)
 // People is appended to "Tools" only for admins / managers / hiring team.
 const SECTIONS = [
   {
@@ -57,6 +58,8 @@ export default function Sidebar() {
     },
   });
   const showPeople = profile?.role && ['admin', 'hiring_manager', 'hiring_team'].includes(profile.role);
+  // Schedule management is admin / manager only - keeps the sidebar tidy for interviewers.
+  const showScheduledReports = profile?.role && ['admin', 'hiring_manager'].includes(profile.role);
 
   // Pending feedback count → renders as a badge on the "Interviews" item.
   // Cheap query: assignments WHERE interviewer_id = me, then count those without feedback.
@@ -87,6 +90,9 @@ export default function Sidebar() {
     let items = section.items.map((it) =>
       it.to === '/my-interviews' ? { ...it, badge: pendingCount > 0 ? pendingCount : 0 } : it
     );
+    if (section.label === 'Tools' && showScheduledReports) {
+      items = [...items, { to: '/scheduled-reports', label: 'Scheduled Reports', icon: Clock }];
+    }
     if (section.label === 'Tools' && showPeople) {
       items = [...items, { to: '/people', label: 'People', icon: UserCog }];
     }

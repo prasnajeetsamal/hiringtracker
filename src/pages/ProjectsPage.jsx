@@ -38,7 +38,7 @@ const ROLE_STATUS_TONE = {
  *                          slides in showing the selected project's roles
  *                          and actions. Close X returns to /projects.
  *
- * The collapsible panel pattern preserves context — the project list stays
+ * The collapsible panel pattern preserves context - the project list stays
  * visible while a single project is being inspected. Clicking another card
  * swaps the panel to that project; clicking the close button or pressing
  * Escape returns to the full grid.
@@ -413,7 +413,7 @@ function ProjectDetailPanel({ projectId, isAdmin, onClose }) {
 
   return (
     <Card padding={false} className="relative">
-      {/* Sticky panel header — close button always visible */}
+      {/* Sticky panel header - close button always visible */}
       <div className="sticky top-0 z-10 flex items-start justify-between gap-3 px-4 py-3 border-b border-slate-800 bg-slate-900/95 backdrop-blur">
         <div className="min-w-0 flex-1">
           {projectLoading ? (

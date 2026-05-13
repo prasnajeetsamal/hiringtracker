@@ -96,10 +96,23 @@ export async function summarizeFeedback({ candidateId }) {
   return req('/api/summarize-feedback', { method: 'POST', body: { candidateId } });
 }
 
+// Consolidated admin-users endpoint (one Vercel function dispatching on `action`).
 export async function inviteUser({ email, fullName, role }) {
-  return req('/api/invite-user', { method: 'POST', body: { email, fullName, role } });
+  return req('/api/admin-users', { method: 'POST', body: { action: 'invite', email, fullName, role } });
 }
 
 export async function updateUserRole({ userId, role }) {
-  return req('/api/update-user-role', { method: 'POST', body: { userId, role } });
+  return req('/api/admin-users', { method: 'POST', body: { action: 'update_role', userId, role } });
+}
+
+export async function semanticSearchCandidates({ query, limit, projectId, roleId }) {
+  return req('/api/semantic-search', { method: 'POST', body: { query, limit, projectId, roleId } });
+}
+
+export async function notifyMention({ commentId }) {
+  return req('/api/notify-mention', { method: 'POST', body: { commentId } });
+}
+
+export async function transitionCandidate({ candidateId, action }) {
+  return req('/api/transition-candidate', { method: 'POST', body: { candidateId, action } });
 }

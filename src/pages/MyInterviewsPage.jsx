@@ -201,14 +201,14 @@ function AllView() {
                     </Link>
                   </td>
                   <td className="px-4 py-2.5">
-                    <div className="text-slate-200">{c.role?.title || '—'}</div>
+                    <div className="text-slate-200">{c.role?.title || '-'}</div>
                     <div className="text-[11px] text-slate-500">{c.role?.project?.name}</div>
                   </td>
                   <td className="px-4 py-2.5">
                     <StageBadge stageKey={a.pipeline?.stage_key} state={a.pipeline?.state} size="sm" />
                   </td>
                   <td className="px-4 py-2.5">
-                    <div className="text-slate-200 text-xs">{a.interviewer?.full_name || a.interviewer?.email || '—'}</div>
+                    <div className="text-slate-200 text-xs">{a.interviewer?.full_name || a.interviewer?.email || '-'}</div>
                   </td>
                   <td className="px-4 py-2.5">
                     {fb ? <RecommendationBadge value={fb.recommendation} /> : <span className="text-[11px] text-amber-300">Pending</span>}

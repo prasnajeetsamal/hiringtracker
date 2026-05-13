@@ -15,6 +15,7 @@ import MyInterviewsPage from '../../pages/MyInterviewsPage.jsx';
 import JDTemplatesPage from '../../pages/JDTemplatesPage.jsx';
 import PeoplePage from '../../pages/PeoplePage.jsx';
 import ReportsPage from '../../pages/ReportsPage.jsx';
+import ScheduledReportsPage from '../../pages/ScheduledReportsPage.jsx';
 import SettingsPage from '../../pages/SettingsPage.jsx';
 import NotFoundPage from '../../pages/NotFoundPage.jsx';
 
@@ -23,7 +24,7 @@ export default function AppShell() {
     <div className="min-h-screen flex text-slate-200">
       <Sidebar />
       <div className="flex-1 min-w-0 flex flex-col">
-        {/* Mobile-only header — desktop has UserMenu in the sidebar footer */}
+        {/* Mobile-only header - desktop has UserMenu in the sidebar footer */}
         <header className="md:hidden h-14 border-b border-slate-800/80 bg-slate-950/40 backdrop-blur flex items-center justify-end px-4 sticky top-0 z-30">
           <UserMenu />
         </header>
@@ -40,6 +41,7 @@ export default function AppShell() {
             <Route path="/jd-templates" element={<JDTemplatesPage />} />
             <Route path="/people" element={<PeoplePage />} />
             <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/scheduled-reports" element={<ScheduledReportsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>

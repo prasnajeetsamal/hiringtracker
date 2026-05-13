@@ -75,51 +75,64 @@ select, input, textarea, button {
   100% { transform: translateX(100%); }
 }
 
-/* Print styles — used by Reports page "Print / PDF" action.
+/* Print styles - used by Reports page "Print / PDF" action.
    Hides chrome (sidebar / FAB / actions / filter bar) and renders content
    on a white page so the export looks like a real report. */
 @media print {
-  body {
-    background: white !important;
-    color: black !important;
+  /* Honour all our colour choices - gradients, score bars, accent chips. */
+  *, *::before, *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
-  aside, header, .rbc-toolbar, [class*="ChatWidget"] {
+  @page { margin: 0.5in; }
+
+  html, body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+  /* Hide app chrome */
+  aside, header, .rbc-toolbar, [class*="ChatWidget"], button, .no-print {
     display: none !important;
   }
-  /* The chat FAB is a fixed button — hide everything fixed */
+  /* The chat FAB and toast roots are fixed - hide everything fixed */
   body > div > button.fixed,
-  body > div > div.fixed {
+  body > div > div.fixed,
+  [data-rk], [data-sonner-toaster] {
     display: none !important;
   }
-  main {
-    padding: 0 !important;
-  }
-  /* Cards / surfaces — flatten to white */
+  main { padding: 0 !important; }
+
+  /* Cards become light-themed but keep structure. We override the dark-theme
+     background classes Tailwind generated, then let inline styles for accent
+     bars / gradients shine through. */
   .rounded-2xl, .rounded-xl, .rounded-lg {
-    background: white !important;
-    border-color: #cbd5e1 !important;
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
     box-shadow: none !important;
     backdrop-filter: none !important;
+    page-break-inside: avoid;
   }
-  /* Force readable text */
-  *, *::before, *::after {
-    color: #0f172a !important;
-    background-image: none !important;
-    text-shadow: none !important;
-  }
-  .text-gradient {
-    background: none !important;
-    -webkit-background-clip: initial !important;
-            background-clip: initial !important;
-    color: #4338ca !important;
-  }
-  /* Hide buttons / interactive controls */
-  button, .no-print {
-    display: none !important;
-  }
+
+  /* Default text colour - slate-900-ish. Lighter neutrals stay lighter. */
+  .text-slate-100, .text-slate-200 { color: #0f172a !important; }
+  .text-slate-300 { color: #1e293b !important; }
+  .text-slate-400 { color: #475569 !important; }
+  .text-slate-500 { color: #64748b !important; }
+  /* Keep accent colours visible (slightly darker so they read on white). */
+  .text-indigo-300, .text-indigo-200 { color: #4338ca !important; }
+  .text-violet-300, .text-violet-200 { color: #6d28d9 !important; }
+  .text-emerald-300, .text-emerald-200 { color: #047857 !important; }
+  .text-rose-300, .text-rose-200       { color: #be123c !important; }
+  .text-amber-300, .text-amber-200     { color: #b45309 !important; }
+
+  /* Buttons inside cards (rare on Reports) - hidden via the broad rule above. */
+
+  /* The HeroCard / KPI gradient backdrop glows would print as washed-out
+     blobs - neutralise those specifically. */
+  .blur-3xl { display: none !important; }
 }
 
-/* JD content (Tiptap output) — rendered both in the editor and read-only views */
+/* JD content (Tiptap output) - rendered both in the editor and read-only views */
 .jd-content h2, .jd-prose h2 {
   font-size: 1.05rem;
   font-weight: 600;
@@ -146,6 +159,19 @@ select, input, textarea, button {
   font-style: italic;
 }
 .jd-content hr, .jd-prose hr { border-color: rgb(51 65 85); margin: 1em 0; }
+
+/* @mention chip rendered inside .jd-prose comment bodies */
+.jd-prose .mention {
+  display: inline-block;
+  padding: 0 0.4em;
+  border-radius: 0.4em;
+  background: rgba(99, 102, 241, 0.15);
+  color: rgb(199, 210, 254);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  font-weight: 500;
+  font-size: 0.92em;
+  line-height: 1.4;
+}
 .jd-content p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   color: rgb(100 116 139);

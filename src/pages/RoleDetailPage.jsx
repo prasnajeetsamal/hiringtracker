@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Save, Briefcase, FileText, Sliders, Upload, FileBox, Trash2, Archive, ArchiveRestore } from 'lucide-react';
+import { ArrowLeft, Save, Briefcase, FileText, Sliders, Upload, FileBox, Trash2, Archive, ArchiveRestore, Sparkles, FileCode } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import PageHeader from '../components/common/PageHeader.jsx';
@@ -19,7 +19,8 @@ import PipelineBoard from '../components/pipeline/PipelineBoard.jsx';
 import StageCustomizer from '../components/pipeline/StageCustomizer.jsx';
 
 import { supabase } from '../lib/supabase.js';
-import { uploadJD, deleteRole } from '../lib/api.js';
+import { uploadJD, deleteRole, generateJD } from '../lib/api.js';
+import { renderHtmlDocument, downloadHtmlFile, esc, sanitizeHtml } from '../lib/htmlExport.js';
 import { useIsAdmin } from '../lib/useIsAdmin.js';
 import { fetchRoleById, updateRole } from '../lib/queryHelpers.js';
 
@@ -43,6 +44,8 @@ export default function RoleDetailPage() {
   const [stageOpen, setStageOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [jdFile, setJdFile] = useState(null);
+  const [generateOpen, setGenerateOpen] = useState(false);
+  const [generatePrompt, setGeneratePrompt] = useState('');
 
   useEffect(() => {
     if (role) {
@@ -117,6 +120,25 @@ export default function RoleDetailPage() {
     onError: (e) => toast.error(e.message),
   });
 
+  const generate = useMutation({
+    mutationFn: async () => generateJD({
+      title: draft.title,
+      level: draft.level,
+      work_mode: draft.work_mode,
+      city: draft.city,
+      state: draft.state,
+      country: draft.country,
+      prompt: generatePrompt,
+    }),
+    onSuccess: ({ jd_html }) => {
+      toast.success('Draft generated - review and save');
+      setDraft((d) => ({ ...d, jd_html: jd_html || d.jd_html }));
+      setGenerateOpen(false);
+      setGeneratePrompt('');
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   const remove = useMutation({
     mutationFn: async () => deleteRole({ roleId }),
     onSuccess: () => {
@@ -155,6 +177,7 @@ export default function RoleDetailPage() {
         subtitle={[role.sr_number && `SR ${role.sr_number}`, role.level, formatLocation(role)].filter(Boolean).join(' · ') || 'Role details'}
         actions={
           <>
+            <Button variant="ghost" icon={FileCode} onClick={() => exportRoleHtml(role)}>HTML report</Button>
             <Button icon={Save} onClick={() => save.mutate()} loading={save.isPending}>Save role</Button>
             {role.status === 'closed' ? (
               <Button variant="secondary" icon={ArchiveRestore} onClick={() => archive.mutate('open')} loading={archive.isPending}>Reopen</Button>
@@ -176,6 +199,7 @@ export default function RoleDetailPage() {
               <span className="font-medium">Job description</span>
             </div>
             <div className="flex gap-2">
+              <Button size="sm" variant="ghost" icon={Sparkles} onClick={() => setGenerateOpen(true)}>Generate with AI</Button>
               <Button size="sm" variant="ghost" icon={FileBox} onClick={() => setPickOpen(true)}>Use template</Button>
               <Button size="sm" variant="ghost" icon={Upload} onClick={() => setUploadOpen(true)}>Upload</Button>
             </div>
@@ -250,6 +274,33 @@ export default function RoleDetailPage() {
         <FileDrop value={jdFile} onChange={setJdFile} />
       </Modal>
 
+      <Modal
+        open={generateOpen}
+        onClose={() => setGenerateOpen(false)}
+        title="Generate JD with AI"
+        size="lg"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setGenerateOpen(false)}>Cancel</Button>
+            <Button icon={Sparkles} onClick={() => generate.mutate()} loading={generate.isPending} disabled={!draft.title}>
+              {generate.isPending ? 'Drafting…' : 'Generate'}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-xs text-slate-400 mb-3">
+          Claude drafts a structured JD using the role's title, level, and location. Add a short brief below for better results.
+          This <strong>replaces</strong> the current JD content - save to commit.
+        </p>
+        <textarea
+          value={generatePrompt}
+          onChange={(e) => setGeneratePrompt(e.target.value)}
+          rows={5}
+          placeholder="e.g. We're hiring for our ML platform team. Must have 5+ yrs Python, hands-on with PyTorch + Spark, has shipped LLM inference at scale. Will own model serving infra. Reports to the platform lead."
+          className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+      </Modal>
+
       <ConfirmDialog
         open={confirmDeleteOpen}
         onClose={() => setConfirmDeleteOpen(false)}
@@ -318,4 +369,99 @@ function Input({ value, onChange, ...rest }) {
       {...rest}
     />
   );
+}
+
+// ─── HTML export ─────────────────────────────────────────────────────────
+// Self-contained role + JD + pipeline snapshot. Useful for circulating a JD
+// draft for sign-off or sharing a role brief externally.
+
+async function exportRoleHtml(role) {
+  if (!role) return;
+  try {
+    const { data: cands } = await supabase
+      .from('candidates')
+      .select('id, full_name, status, current_stage_key, ai_score')
+      .eq('role_id', role.id);
+
+    const candidates = cands || [];
+    const active = candidates.filter((c) => c.status === 'active');
+    const hired = candidates.filter((c) => c.status === 'hired').length;
+    const rejected = candidates.filter((c) => c.status === 'rejected').length;
+    const byStage = {};
+    active.forEach((c) => {
+      const k = c.current_stage_key || 'resume_submitted';
+      byStage[k] = (byStage[k] || 0) + 1;
+    });
+
+    const html = renderHtmlDocument({
+      title: `Slate - ${role.title}`,
+      header: {
+        eyebrow: 'Slate · Role brief',
+        title: role.title,
+        subtitle: [
+          role.sr_number && `SR ${role.sr_number}`,
+          role.level,
+          formatLocation(role),
+          role.project?.name,
+        ].filter(Boolean).join(' · '),
+      },
+      body: buildRoleHtmlBody(role, { candidates, active, hired, rejected, byStage }),
+    });
+    downloadHtmlFile(html, `slate-role-${(role.title || 'role').toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.html`);
+    toast.success('Role report downloaded');
+  } catch (e) {
+    toast.error(e.message || 'Failed to build role report');
+  }
+}
+
+function buildRoleHtmlBody(role, agg) {
+  const meta = `
+    <div class="panel">
+      <div class="panel__title">Role details</div>
+      <dl class="meta-grid">
+        ${role.sr_number ? `<dt>SR number</dt><dd>${esc(role.sr_number)}</dd>` : ''}
+        <dt>Level</dt><dd>${esc(role.level || '-')}</dd>
+        <dt>Work mode</dt><dd>${esc(role.work_mode || '-')}</dd>
+        <dt>Location</dt><dd>${esc(formatLocation(role) || '-')}</dd>
+        <dt>Status</dt><dd>${esc(role.status || '-')}</dd>
+        <dt>Project</dt><dd>${esc(role.project?.name || '-')}</dd>
+        ${role.created_at ? `<dt>Created</dt><dd>${esc(new Date(role.created_at).toLocaleDateString())}</dd>` : ''}
+      </dl>
+    </div>`;
+
+  const kpi = (label, value, tone) => `
+    <div class="kpi kpi--${tone}">
+      <div class="kpi__label">${esc(label)}</div>
+      <div class="kpi__value">${esc(value)}</div>
+    </div>`;
+  const kpis = `
+    <div class="kpis" style="grid-template-columns: repeat(4, 1fr);">
+      ${kpi('Active candidates', agg.active.length, 'indigo')}
+      ${kpi('Hired', agg.hired, 'emerald')}
+      ${kpi('Rejected', agg.rejected, 'rose')}
+      ${kpi('Total considered', agg.candidates.length, 'violet')}
+    </div>`;
+
+  // Active-by-stage bars (lightweight, no historical reach data needed)
+  const maxCount = Math.max(1, ...Object.values(agg.byStage));
+  const stageBars = Object.keys(agg.byStage).length === 0
+    ? '<div class="muted">No active candidates yet.</div>'
+    : Object.entries(agg.byStage).map(([k, v]) => `
+        <div class="stage">
+          <div class="stage__label">${esc(k.replace(/_/g, ' '))} <span class="generated" style="margin-left:6px;">(${v})</span></div>
+          <div class="stage__bar"><span class="seg" style="width:${(v / maxCount) * 100}%;background:#6366f1;"></span></div>
+        </div>`).join('');
+  const stageBlock = `
+    <div class="panel">
+      <div class="panel__title">Active candidates by stage</div>
+      ${stageBars}
+    </div>`;
+
+  const jdBlock = `
+    <div class="panel">
+      <div class="panel__title">Job description</div>
+      ${role.jd_html ? sanitizeHtml(role.jd_html) : '<div class="muted">No JD attached.</div>'}
+    </div>`;
+
+  return [meta, kpis, stageBlock, jdBlock].join('\n');
 }

@@ -4,11 +4,11 @@ import { Link } from 'react-router-dom';
 import {
   FolderKanban, Users, Briefcase, ClipboardCheck, Clock, Sparkles,
   ArrowRight, AlertTriangle, TrendingUp, Activity, Plus, Database, Copy,
-  CheckCircle2, XCircle, Send,
+  CheckCircle2, XCircle, Send, AtSign,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-// Vite raw import — bundles the SQL file content as a string.
+// Vite raw import - bundles the SQL file content as a string.
 import seedSql from '../../supabase/demo/seed_demo_data.sql?raw';
 
 import PageHeader from '../components/common/PageHeader.jsx';
@@ -17,11 +17,9 @@ import Button from '../components/common/Button.jsx';
 import Spinner from '../components/common/Spinner.jsx';
 import FilterBar, { FilterSelect } from '../components/common/FilterBar.jsx';
 import StageBadge from '../components/candidates/StageBadge.jsx';
-import RecommendationBadge from '../components/candidates/RecommendationBadge.jsx';
 import HeroCard from '../components/dashboard/HeroCard.jsx';
 import PipelineFunnel from '../components/dashboard/PipelineFunnel.jsx';
 import Sparkline from '../components/dashboard/Sparkline.jsx';
-import ScoreGauge from '../components/dashboard/ScoreGauge.jsx';
 import { supabase } from '../lib/supabase.js';
 import { useAuth } from '../lib/AuthContext.jsx';
 import { useIsAdmin } from '../lib/useIsAdmin.js';
@@ -44,7 +42,7 @@ function useDashboardData(userId, filters) {
 
       const [
         projectsAgg, rolesAgg, candidatesAll, myAssignments, pipelineRows,
-        recentAudit, profileRow,
+        recentAudit, profileRow, mentionsRaw,
       ] = await Promise.all([
         supabase.from('hiring_projects').select('id, name, status'),
         supabase.from('roles').select('id, project_id, status'),
@@ -53,7 +51,8 @@ function useDashboardData(userId, filters) {
           ai_analysis,
           role:roles ( id, title, project_id, project:hiring_projects ( id, name ) )
         `),
-        supabase.from('interviewer_assignments').select('id, pipeline_id').eq('interviewer_id', userId),
+        // Org-wide assignments + feedback (for the team-level "Pending feedback" KPI)
+        supabase.from('interviewer_assignments').select('id, pipeline_id, interviewer_id'),
         supabase.from('candidate_pipeline').select('id, candidate_id, stage_key, state'),
         supabase.from('audit_log')
           .select(`id, action, entity_type, entity_id, before, after, created_at,
@@ -61,6 +60,13 @@ function useDashboardData(userId, filters) {
           .order('created_at', { ascending: false })
           .limit(10),
         supabase.from('profiles').select('full_name, email').eq('id', userId).single(),
+        // Comments where I'm @mentioned. Most recent first.
+        supabase.from('comments')
+          .select(`id, body_html, entity_type, entity_id, created_at,
+                   author:profiles!comments_author_id_fkey ( id, full_name, email )`)
+          .contains('mentions', [userId])
+          .order('created_at', { ascending: false })
+          .limit(8),
       ]);
 
       // Apply filters client-side so we can also filter pipeline rows etc.
@@ -81,22 +87,31 @@ function useDashboardData(userId, filters) {
         .sort((a, b) => b.created_at.localeCompare(a.created_at))
         .slice(0, 6);
 
-      // Top scoring (filtered active set with ai_score, top 5)
-      const topCandidatesArr = allCandidates
-        .filter((c) => c.status === 'active' && typeof c.ai_score === 'number')
-        .sort((a, b) => (b.ai_score || 0) - (a.ai_score || 0))
-        .slice(0, 5);
-
+      // Pending feedback is now an org-wide tally: count (assignment, interviewer)
+      // pairs without a matching feedback row, restricted to active candidates so
+      // hired/rejected candidates don't leave dangling pending counts.
       let pendingFeedback = 0;
-      const pipelineIds = (myAssignments.data || []).map((a) => a.pipeline_id);
-      if (pipelineIds.length) {
-        const { data: fb } = await supabase
-          .from('feedback')
-          .select('pipeline_id')
-          .eq('interviewer_id', userId)
-          .in('pipeline_id', pipelineIds);
-        const submitted = new Set((fb || []).map((f) => f.pipeline_id));
-        pendingFeedback = pipelineIds.filter((id) => !submitted.has(id)).length;
+      const allAssignments = myAssignments.data || [];
+      if (allAssignments.length) {
+        // Active candidates pipeline ids set for narrowing.
+        const activeCandIds = new Set(allCandidates.filter((c) => c.status === 'active').map((c) => c.id));
+        const activePipelineIds = new Set(
+          (pipelineRows.data || [])
+            .filter((p) => activeCandIds.has(p.candidate_id) && p.state !== 'skipped')
+            .map((p) => p.id)
+        );
+        const relevant = allAssignments.filter((a) => activePipelineIds.has(a.pipeline_id));
+        const relevantPipelineIds = [...new Set(relevant.map((a) => a.pipeline_id))];
+        if (relevantPipelineIds.length) {
+          const { data: fb } = await supabase
+            .from('feedback')
+            .select('pipeline_id, interviewer_id')
+            .in('pipeline_id', relevantPipelineIds);
+          const submittedKeys = new Set((fb || []).map((f) => `${f.pipeline_id}|${f.interviewer_id}`));
+          pendingFeedback = relevant.filter(
+            (a) => !submittedKeys.has(`${a.pipeline_id}|${a.interviewer_id}`)
+          ).length;
+        }
       }
 
       const activeCandidates = allCandidates.filter((c) => c.status === 'active');
@@ -159,6 +174,28 @@ function useDashboardData(userId, filters) {
         return true;
       });
 
+      // @mentions inbox: resolve each mention to a candidate-link if possible.
+      const pipelineIdToCandidateId = new Map(
+        (pipelineRows.data || []).map((p) => [p.id, p.candidate_id])
+      );
+      const myMentions = (mentionsRaw.data || []).map((m) => {
+        let candidateId = null;
+        if (m.entity_type === 'candidate') candidateId = m.entity_id;
+        else if (m.entity_type === 'pipeline') candidateId = pipelineIdToCandidateId.get(m.entity_id) || null;
+        return {
+          id: m.id,
+          author: m.author,
+          created_at: m.created_at,
+          entity_type: m.entity_type,
+          entity_id: m.entity_id,
+          candidate_id: candidateId,
+          // Strip HTML to a short preview snippet (~120 chars).
+          snippet: m.body_html
+            ? m.body_html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120)
+            : '',
+        };
+      });
+
       return {
         profile: profileRow.data,
         // Lookups for the filter dropdown
@@ -178,11 +215,11 @@ function useDashboardData(userId, filters) {
         currentByStage,
         everReachedByStage,
         recentCandidates: recentCandidatesArr,
-        topCandidates: topCandidatesArr,
         stale,
         topRoles,
         recentAudit: recentAudit.data || [],
         sparkline: dayBuckets,
+        myMentions,
       };
     },
   });
@@ -315,7 +352,7 @@ function SeedDataCallout({ visible }) {
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(seedSql);
-      toast.success('Seed SQL copied — paste it into Supabase SQL Editor and click Run.');
+      toast.success('Seed SQL copied - paste it into Supabase SQL Editor and click Run.');
     } catch {
       toast.error('Could not copy. Open supabase/demo/seed_demo_data.sql in your repo.');
     }
@@ -329,7 +366,7 @@ function SeedDataCallout({ visible }) {
       <div className="flex-1 min-w-0">
         <div className="text-sm font-semibold text-slate-100">Want to see Slate with sample data?</div>
         <div className="text-xs text-slate-400 mt-0.5 leading-relaxed">
-          Click <strong>Copy seed SQL</strong>, paste it into your Supabase project's SQL Editor, and click Run. It seeds ~5 candidates per role across all 7 stages, with AI scores, comments, and availability slots — and skips any role that already has real data. Tagged for easy bulk-delete later.
+          Click <strong>Copy seed SQL</strong>, paste it into your Supabase project's SQL Editor, and click Run. It seeds ~5 candidates per role across all 7 stages, with AI scores, comments, and availability slots - and skips any role that already has real data. Tagged for easy bulk-delete later.
         </div>
         <div className="flex gap-2 mt-3">
           <Button size="sm" icon={Copy} onClick={copy}>Copy seed SQL</Button>
@@ -414,7 +451,7 @@ export default function DashboardPage() {
               const pName = (data?.projects || []).find((p) => p.id === r.project_id)?.name;
               return {
                 value: r.id,
-                label: !projectFilter && pName ? `${r.title} — ${pName}` : r.title,
+                label: !projectFilter && pName ? `${r.title} - ${pName}` : r.title,
               };
             }),
           ]}
@@ -455,9 +492,9 @@ export default function DashboardPage() {
         />
         <KpiCard
           icon={ClipboardCheck}
-          label="My pending feedback"
+          label="Pending feedback"
           value={k.pendingFeedback ?? 0}
-          sub={k.pendingFeedback ? 'Submit before stale' : "You're all caught up"}
+          sub={k.pendingFeedback ? 'Across the team' : 'Team is all caught up'}
           accent={k.pendingFeedback ? 'amber' : 'emerald'}
           to="/my-interviews"
         />
@@ -498,35 +535,12 @@ export default function DashboardPage() {
         <Card>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2 text-slate-200">
-              <Sparkles size={16} className="text-amber-300" />
-              <span className="font-medium">Top AI scores</span>
+              <Briefcase size={16} className="text-violet-300" />
+              <span className="font-medium">Roles needing attention</span>
             </div>
-          </div>
-          {!data?.topCandidates?.length ? (
-            <div className="text-sm text-slate-500 italic">Score candidates to see them here.</div>
-          ) : (
-            <div className="space-y-2">
-              {data.topCandidates.map((c) => (
-                <Link key={c.id} to={`/candidates/${c.id}`} className="flex items-center gap-3 -mx-2 px-2 py-1.5 rounded-md hover:bg-slate-900/40 transition">
-                  <ScoreGauge score={c.ai_score} size={36} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-slate-100 truncate">{c.full_name || 'Unnamed'}</div>
-                    <div className="text-[11px] text-slate-500 truncate">{c.role?.title}</div>
-                  </div>
-                  <RecommendationBadge value={c.ai_analysis?.recommendation} />
-                </Link>
-              ))}
-            </div>
-          )}
-        </Card>
-      </div>
-
-      {/* Bottom: roles + activity + stale */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card>
-          <div className="flex items-center gap-2 text-slate-200 mb-3">
-            <Briefcase size={16} className="text-violet-300" />
-            <span className="font-medium">Roles needing attention</span>
+            <Link to="/projects" className="text-[11px] text-slate-500 hover:text-slate-300">
+              All projects →
+            </Link>
           </div>
           {!data?.topRoles?.length ? (
             <div className="text-sm text-slate-500 italic">No active candidates on any role yet.</div>
@@ -542,6 +556,43 @@ export default function DashboardPage() {
                   <ArrowRight size={14} className="text-slate-500" />
                 </Link>
               ))}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* Bottom: mentions + activity + stale */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card>
+          <div className="flex items-center gap-2 text-slate-200 mb-3">
+            <AtSign size={16} className="text-indigo-300" />
+            <span className="font-medium">@ Mentions of you</span>
+          </div>
+          {!data?.myMentions?.length ? (
+            <div className="text-sm text-slate-500 italic">No one has mentioned you yet. Type <span className="font-mono text-slate-400">@</span> in any comment to tag a teammate.</div>
+          ) : (
+            <div className="space-y-2">
+              {data.myMentions.map((m) => {
+                const target = m.candidate_id ? `/candidates/${m.candidate_id}` : null;
+                const inner = (
+                  <div className="flex items-start gap-2.5 -mx-2 px-2 py-1.5 rounded-md hover:bg-slate-900/40 transition">
+                    <Avatar name={m.author?.full_name || m.author?.email || '?'} size={26} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-slate-300">
+                        <span className="font-medium text-slate-100">{m.author?.full_name || m.author?.email || 'Someone'}</span>
+                        <span className="text-slate-500"> · {m.entity_type === 'pipeline' ? 'stage' : m.entity_type}</span>
+                      </div>
+                      <div className="text-xs text-slate-400 line-clamp-2 mt-0.5">{m.snippet}</div>
+                    </div>
+                    <RelativeTime iso={m.created_at} />
+                  </div>
+                );
+                return target ? (
+                  <Link key={m.id} to={target} className="block">{inner}</Link>
+                ) : (
+                  <div key={m.id}>{inner}</div>
+                );
+              })}
             </div>
           )}
         </Card>

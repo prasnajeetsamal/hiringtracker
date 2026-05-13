@@ -145,8 +145,8 @@ export default function CandidateImportDialog({ open, onClose, roleId: presetRol
     const ok = uploaded.length;
     const total = files.length;
     if (ok === total) toast.success(`Added ${ok} candidate${ok === 1 ? '' : 's'}`);
-    else if (ok > 0)  toast.success(`${ok} of ${total} candidates added — see details below`);
-    else              toast.error('No candidates were added — see details below');
+    else if (ok > 0)  toast.success(`${ok} of ${total} candidates added - see details below`);
+    else              toast.error('No candidates were added - see details below');
   };
 
   /** LinkedIn / manual tabs. */
@@ -245,7 +245,7 @@ export default function CandidateImportDialog({ open, onClose, roleId: presetRol
               <div className="mt-1.5 max-h-40 overflow-y-auto space-y-1">
                 {filteredRoles.length === 0 ? (
                   <div className="text-[11px] text-slate-500 italic px-1 py-2">
-                    {roles?.length === 0 ? 'No roles exist yet — create one first.' : 'No matches.'}
+                    {roles?.length === 0 ? 'No roles exist yet - create one first.' : 'No matches.'}
                   </div>
                 ) : (
                   filteredRoles.map((r) => (
@@ -328,7 +328,7 @@ export default function CandidateImportDialog({ open, onClose, roleId: presetRol
             />
           </Field>
           <div className="text-[11px] text-slate-500">
-            We store the URL only. <strong>AI scoring is unavailable for LinkedIn-only candidates</strong> — upload a resume later to enable it.
+            We store the URL only. <strong>AI scoring is unavailable for LinkedIn-only candidates</strong> - upload a resume later to enable it.
           </div>
         </div>
       )}

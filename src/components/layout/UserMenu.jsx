@@ -14,7 +14,7 @@ function initialsFor(email = '') {
 }
 
 /**
- * UserMenu — pill button + popover.
+ * UserMenu - pill button + popover.
  *
  * `variant`:
  *   - "compact"  (default): just an avatar circle + chevron, popover opens below.

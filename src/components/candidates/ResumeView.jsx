@@ -8,12 +8,12 @@ import { Mail, Phone, Linkedin, Globe } from 'lucide-react';
  * which gives us raw lines with whitespace preserved. We don't get any
  * structural HTML, so we apply heuristics:
  *
- *   1. Detect section headings — short lines (< 50 chars) that are mostly
+ *   1. Detect section headings - short lines (< 50 chars) that are mostly
  *      ALL CAPS (e.g. "EXPERIENCE", "EDUCATION", "SKILLS").
- *   2. Detect bullet items — lines starting with -, •, *, ▪, ‣, ◦, etc.
- *   3. Detect contact lines — early lines containing emails / phone /
+ *   2. Detect bullet items - lines starting with -, •, *, ▪, ‣, ◦, etc.
+ *   3. Detect contact lines - early lines containing emails / phone /
  *      LinkedIn / GitHub URLs separated by typical delimiters (• | / ,).
- *   4. Detect role lines — "Company — Title  Date Range" or similar
+ *   4. Detect role lines - "Company - Title  Date Range" or similar
  *      patterns that often introduce a job entry; render with subtle
  *      emphasis on the date portion.
  *   5. Everything else renders as a paragraph with line breaks preserved.
@@ -141,13 +141,13 @@ function splitContact(line) {
     .filter(Boolean);
 }
 
-// "Company — Title  Jan 2020 - Present" style
+// "Company - Title  Jan 2020 - Present" style
 function parseRoleLine(line) {
   const t = line.trim();
-  const dateMatch = t.match(/((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4}\s*[-–—]\s*(?:Present|Current|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4})|\d{4}\s*[-–—]\s*(?:Present|Current|\d{4}))/i);
+  const dateMatch = t.match(/((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4}\s*[---]\s*(?:Present|Current|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4})|\d{4}\s*[---]\s*(?:Present|Current|\d{4}))/i);
   if (!dateMatch) return null;
   const dates = dateMatch[0];
-  const title = t.replace(dates, '').replace(/\s{2,}/g, ' ').replace(/[\s—–-]+$/, '').trim();
+  const title = t.replace(dates, '').replace(/\s{2,}/g, ' ').replace(/[\s---]+$/, '').trim();
   if (!title) return null;
   return { title, dates };
 }
@@ -167,7 +167,7 @@ export function parseResume(raw) {
     // Treat the very first non-empty section as the header (name + contact).
     if (s === 0 && !firstParagraphSeen) {
       firstParagraphSeen = true;
-      // Detect a "name" line — usually the first line, short, mostly title
+      // Detect a "name" line - usually the first line, short, mostly title
       // case or all caps. If the second line looks like contact info, render
       // it specially.
       let i = 0;
@@ -182,7 +182,7 @@ export function parseResume(raw) {
         if (looksLikeContact(lines[i])) {
           contactParts.push(...splitContact(lines[i]));
         } else {
-          // Generic info line — push as paragraph and stop.
+          // Generic info line - push as paragraph and stop.
           if (contactParts.length === 0) {
             result.push({ type: 'paragraph', text: lines[i] });
           } else {
@@ -223,7 +223,7 @@ export function parseResume(raw) {
       continue;
     }
 
-    // First line is a heading — emit heading then the rest
+    // First line is a heading - emit heading then the rest
     if (lines.length >= 1 && isHeading(lines[0])) {
       result.push({ type: 'heading', text: lines[0] });
       const rest = lines.slice(1);
@@ -242,7 +242,7 @@ export function parseResume(raw) {
       continue;
     }
 
-    // No heading prefix — emit as mixed content
+    // No heading prefix - emit as mixed content
     emitMixed(lines, result);
   }
 

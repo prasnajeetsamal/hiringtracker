@@ -123,9 +123,9 @@ export default async function handler(req, res) {
       const stage = STAGE_LABELS[f.pipeline?.stage_key] || f.pipeline?.stage_key || '?';
       const who = f.interviewer?.full_name || f.interviewer?.email || 'Interviewer';
       const rec = f.recommendation || '?';
-      const rating = f.rating ? `${f.rating}/5` : '–';
+      const rating = f.rating ? `${f.rating}/5` : '-';
       const notes = stripHtml(f.body_html) || '(no notes)';
-      return `### ${stage} — ${who}\nRecommendation: ${rec.toUpperCase()} | Rating: ${rating}\nNotes: ${notes}`;
+      return `### ${stage} - ${who}\nRecommendation: ${rec.toUpperCase()} | Rating: ${rating}\nNotes: ${notes}`;
     }).join('\n\n');
 
     const sys = `You are summarizing a hiring committee panel's feedback for a single candidate. You are objective, balanced, and explicit about disagreements. You never invent things that interviewers did not say.
@@ -133,11 +133,11 @@ export default async function handler(req, res) {
 Your job: synthesize the feedback into a brief the committee chair can read in 30 seconds and make a decision.
 
 Rules:
-1. Pull recurring themes — what 2+ interviewers noted on either side.
+1. Pull recurring themes - what 2+ interviewers noted on either side.
 2. Be honest about divergence: when interviewers disagreed, name it and quote the disagreement (in your own words; don't fabricate quotes).
-3. Distinguish "what the candidate did well in interviews" from "what the candidate has done in their career" — only the former is in scope here.
+3. Distinguish "what the candidate did well in interviews" from "what the candidate has done in their career" - only the former is in scope here.
 4. Recommendation should be decisive (2-3 sentences) and tied to specific feedback, not generic.
-5. If feedback is sparse or inconclusive, say so plainly — do not stretch.
+5. If feedback is sparse or inconclusive, say so plainly - do not stretch.
 
 You MUST call submit_committee_brief.`;
 

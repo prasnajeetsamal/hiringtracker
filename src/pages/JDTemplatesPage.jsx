@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FileText, Plus, Pencil, Trash2, Save, X } from 'lucide-react';
+import { FileText, Plus, Pencil, Trash2, Save, X, FileCode } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import PageHeader from '../components/common/PageHeader.jsx';
@@ -14,6 +14,7 @@ import JDEditor from '../components/jd/JDEditor.jsx';
 import { supabase } from '../lib/supabase.js';
 import { useAuth } from '../lib/AuthContext.jsx';
 import { useIsAdmin } from '../lib/useIsAdmin.js';
+import { renderHtmlDocument, downloadHtmlFile, sanitizeHtml } from '../lib/htmlExport.js';
 
 const CATEGORIES = [
   { value: 'engineering', label: 'Engineering' },
@@ -123,7 +124,7 @@ export default function JDTemplatesPage() {
         <EmptyState
           icon={FileText}
           title="No templates yet"
-          description="Create your first template — it'll show up in the role-creation flow as a starter."
+          description="Create your first template - it'll show up in the role-creation flow as a starter."
           action={<Button icon={Plus} onClick={openCreate}>New template</Button>}
         />
       ) : (
@@ -199,6 +200,11 @@ export default function JDTemplatesPage() {
         footer={
           <>
             <Button variant="ghost" onClick={() => setPreviewing(null)}>Close</Button>
+            {previewing && (
+              <Button variant="secondary" icon={FileCode} onClick={() => exportTemplateHtml(previewing)}>
+                HTML report
+              </Button>
+            )}
             {previewing && (isAdmin || !previewing.is_system) && (
               <Button variant="secondary" icon={Pencil} onClick={() => { openEdit(previewing); setPreviewing(null); }}>
                 Edit
@@ -320,4 +326,21 @@ function Field({ label, children }) {
       {children}
     </label>
   );
+}
+
+// ─── HTML export ─────────────────────────────────────────────────────────
+
+function exportTemplateHtml(template) {
+  if (!template) return;
+  const html = renderHtmlDocument({
+    title: `Slate JD - ${template.name}`,
+    header: {
+      eyebrow: 'Slate · JD template',
+      title: template.name,
+      subtitle: `${template.category}${template.is_system ? ' · system template' : ''}`,
+    },
+    body: `<div class="panel"><div class="panel__title">Job description</div>${sanitizeHtml(template.body_html || '<p><em>(empty)</em></p>')}</div>`,
+  });
+  downloadHtmlFile(html, `slate-jd-${(template.name || 'template').toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.html`);
+  toast.success('JD downloaded');
 }

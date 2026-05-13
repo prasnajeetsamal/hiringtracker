@@ -1,5 +1,5 @@
 -- 0001_init.sql
--- Slate — Hiring Tracker base schema (v0.1 walking skeleton).
+-- Slate - Hiring Tracker base schema (v0.1 walking skeleton).
 -- Tables for the full v1 plan are scaffolded here but only the v0.1 ones
 -- are actively populated by the UI yet.
 
@@ -156,7 +156,7 @@ create trigger candidate_pipeline_set_updated_at
   before update on public.candidate_pipeline
   for each row execute function set_updated_at();
 
--- Tables below are scaffolded for v0.5 / v1.0 — empty in v0.1.
+-- Tables below are scaffolded for v0.5 / v1.0 - empty in v0.1.
 
 create table if not exists public.interviewer_assignments (
   id uuid primary key default gen_random_uuid(),

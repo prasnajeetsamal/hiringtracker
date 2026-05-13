@@ -3,7 +3,7 @@
 // moved in N days and emails the project manager(s) a digest.
 //
 // Triggered by Vercel Cron (configured in vercel.json). Vercel attaches an
-// Authorization: Bearer <CRON_SECRET> header — we verify against env var
+// Authorization: Bearer <CRON_SECRET> header - we verify against env var
 // CRON_SECRET if set; otherwise we accept any caller (dev convenience).
 export const config = { runtime: 'nodejs' };
 

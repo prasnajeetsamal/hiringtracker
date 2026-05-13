@@ -3,7 +3,7 @@ import clsx from 'clsx';
 import { Search, ChevronDown, X, SlidersHorizontal, Check } from 'lucide-react';
 
 /**
- * FilterBar — a horizontal row of filter controls with consistent styling.
+ * FilterBar - a horizontal row of filter controls with consistent styling.
  *
  * Compose with <FilterSearch> and <FilterSelect> children, then add an
  * optional "Clear all" pill that lights up when any filter is active.
@@ -66,13 +66,13 @@ export function FilterSearch({ value, onChange, placeholder = 'Search…', class
 }
 
 /**
- * FilterSelect — a fully custom dropdown that matches the dark theme.
+ * FilterSelect - a fully custom dropdown that matches the dark theme.
  *
  * Active = `value` !== `defaultValue` (defaults to first option's value).
  * Long option lists (> 8) get a search input inside the popover.
  *
  * Selected state shows the value text in the trigger pill, with a small
- * ✕ to clear — much more obvious than chevron-only "did I pick anything?".
+ * ✕ to clear - much more obvious than chevron-only "did I pick anything?".
  */
 export function FilterSelect({
   label, value, onChange, options, defaultValue, icon: Icon, className, disabled,

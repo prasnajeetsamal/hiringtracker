@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Users, Download, Star, ArrowRight, Trash2, Plus, Activity, Layers, FolderKanban, Briefcase, Tag as TagIcon } from 'lucide-react';
+import { Users, Download, Star, ArrowRight, Trash2, Plus, Activity, Layers, FolderKanban, Briefcase, Tag as TagIcon, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import PageHeader from '../components/common/PageHeader.jsx';
@@ -14,6 +14,7 @@ import FilterBar, { FilterSearch, FilterSelect } from '../components/common/Filt
 import StageBadge from '../components/candidates/StageBadge.jsx';
 import RecommendationBadge from '../components/candidates/RecommendationBadge.jsx';
 import CandidateImportDialog from '../components/candidates/CandidateImportDialog.jsx';
+import SemanticSearchDialog from '../components/candidates/SemanticSearchDialog.jsx';
 import { supabase } from '../lib/supabase.js';
 import { STAGES } from '../lib/pipeline.js';
 import { useIsAdmin } from '../lib/useIsAdmin.js';
@@ -38,6 +39,7 @@ export default function CandidatesPage() {
   const [tagFilter, setTagFilter] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(null); // candidate row or null
   const [importOpen, setImportOpen] = useState(false);
+  const [smartSearchOpen, setSmartSearchOpen] = useState(false);
 
   const remove = useMutation({
     mutationFn: async (id) => deleteCandidate({ candidateId: id }),
@@ -66,7 +68,7 @@ export default function CandidatesPage() {
     },
   });
 
-  // Distinct tags across visible candidates — feed the tag dropdown.
+  // Distinct tags across visible candidates - feed the tag dropdown.
   const allTags = useMemo(() => {
     const set = new Set();
     (candidates || []).forEach((c) => (c.tags || []).forEach((t) => set.add(t)));
@@ -146,6 +148,7 @@ export default function CandidatesPage() {
         subtitle="All candidates across roles. Add, filter, export."
         actions={
           <>
+            <Button icon={Sparkles} variant="secondary" onClick={() => setSmartSearchOpen(true)}>Smart search</Button>
             <Button icon={Plus} onClick={() => setImportOpen(true)}>Add candidate</Button>
             <Button icon={Download} variant="secondary" onClick={downloadCSV} disabled={filtered.length === 0}>
               Export CSV ({filtered.length})
@@ -210,7 +213,7 @@ export default function CandidatesPage() {
             { value: '', label: projectFilter ? 'All roles in project' : 'All roles' },
             ...rolesForProject.map((r) => ({
               value: r.id,
-              label: r.title + (!projectFilter && r.project?.name ? ` — ${r.project.name}` : ''),
+              label: r.title + (!projectFilter && r.project?.name ? ` - ${r.project.name}` : ''),
             })),
           ]}
         />
@@ -270,7 +273,7 @@ export default function CandidatesPage() {
                       {c.email && <div className="text-[11px] text-slate-500 mt-0.5">{c.email}</div>}
                     </td>
                     <td className="px-4 py-2.5">
-                      <div className="text-slate-200">{c.role?.title || '—'}</div>
+                      <div className="text-slate-200">{c.role?.title || '-'}</div>
                       <div className="text-[11px] text-slate-500">{c.role?.project?.name}</div>
                     </td>
                     <td className="px-4 py-2.5">
@@ -292,7 +295,7 @@ export default function CandidatesPage() {
                           </span>
                           <RecommendationBadge value={c.ai_analysis?.recommendation} />
                         </div>
-                      ) : <span className="text-[11px] text-slate-500">—</span>}
+                      ) : <span className="text-[11px] text-slate-500">-</span>}
                     </td>
                     <td className="px-4 py-2.5">
                       <span className="text-[11px] text-slate-400 capitalize">{c.source}</span>
@@ -324,7 +327,14 @@ export default function CandidatesPage() {
       <CandidateImportDialog
         open={importOpen}
         onClose={() => setImportOpen(false)}
-        // No roleId — dialog will show its own role picker
+        // No roleId - dialog will show its own role picker
+      />
+
+      <SemanticSearchDialog
+        open={smartSearchOpen}
+        onClose={() => setSmartSearchOpen(false)}
+        projectId={projectFilter || undefined}
+        roleId={roleFilter || undefined}
       />
 
       <ConfirmDialog

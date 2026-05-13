@@ -11,7 +11,7 @@ drop policy if exists jd_templates_select_auth on public.jd_templates;
 create policy jd_templates_select_auth on public.jd_templates
   for select to authenticated using (true);
 
--- INSERT — anyone authenticated may insert a non-system template.
+-- INSERT - anyone authenticated may insert a non-system template.
 -- Admins may insert with is_system=true as well.
 create policy jd_templates_insert_personal on public.jd_templates
   for insert to authenticated
@@ -20,7 +20,7 @@ create policy jd_templates_insert_personal on public.jd_templates
     or exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin')
   );
 
--- UPDATE / DELETE — admin can edit anything; non-admins can edit non-system.
+-- UPDATE / DELETE - admin can edit anything; non-admins can edit non-system.
 -- (We don't track per-template authorship, so all non-system templates are
 -- editable/deletable by any authenticated user. This is acceptable for an
 -- internal-only tool; can be tightened later by adding a created_by column.)

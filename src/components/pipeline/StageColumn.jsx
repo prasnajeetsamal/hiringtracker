@@ -15,7 +15,7 @@ export default function StageColumn({ stageKey, candidates }) {
       </div>
       <div className="p-2 space-y-1.5 flex-1 min-h-[80px]">
         {candidates.length === 0 ? (
-          <div className="text-[11px] text-slate-600 text-center py-3">—</div>
+          <div className="text-[11px] text-slate-600 text-center py-3">-</div>
         ) : (
           candidates.map((c) => <CandidateCard key={c.id} candidate={c} />)
         )}
