@@ -1,12 +1,13 @@
 // src/App.jsx
 import React from 'react';
 import { Loader2, AlertCircle } from 'lucide-react';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 
 import AuthScreen from './components/auth/AuthScreen.jsx';
 import AppShell from './components/layout/AppShell.jsx';
+import CandidateStatusPage from './pages/CandidateStatusPage.jsx';
 import { AuthProvider, useAuth } from './lib/AuthContext.jsx';
 import { isSupabaseConfigured } from './lib/supabase.js';
 import { queryClient } from './lib/queryClient.js';
@@ -61,7 +62,13 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <BrowserRouter>
-          <Gate />
+          <Routes>
+            {/* PUBLIC routes - rendered outside the auth Gate so candidates
+                without a Slate login can view their own status by token. */}
+            <Route path="/c/:token" element={<CandidateStatusPage />} />
+            {/* Everything else hits the auth gate. */}
+            <Route path="*" element={<Gate />} />
+          </Routes>
           <Toaster
             position="top-right"
             toastOptions={{

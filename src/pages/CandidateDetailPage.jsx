@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, ArrowRight, X, SkipForward, Sparkles, Linkedin, Mail, Phone,
   FileText, Wand2, MessageSquare, Trash2, Copy, ChevronDown, ChevronUp, AlertCircle,
-  Check, CircleDot, Circle, ChevronRight, FileCode,
+  Check, CircleDot, Circle, ChevronRight, FileCode, Link2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -51,6 +51,7 @@ export default function CandidateDetailPage() {
         .select(`
           id, full_name, email, phone, linkedin_url, resume_text, resume_file_id,
           source, current_stage_key, status, ai_score, ai_analysis, role_id, created_at, tags,
+          public_token,
           role:roles ( id, title, project_id, stage_config,
             project:hiring_projects ( id, name )
           )
@@ -419,6 +420,39 @@ export default function CandidateDetailPage() {
               </div>
             </div>
           </Card>
+
+          {candidate.public_token && (
+            <Card>
+              <div className="flex items-center gap-2 text-slate-200 mb-2">
+                <Link2 size={14} className="text-indigo-300" />
+                <span className="font-medium text-sm">Candidate status link</span>
+              </div>
+              <div className="text-[11px] text-slate-500 mb-2 leading-relaxed">
+                Share this link with the candidate so they can self-check their pipeline status. No Slate login required.
+              </div>
+              <div className="flex gap-1.5">
+                <input
+                  readOnly
+                  value={`${window.location.origin}/c/${candidate.public_token}`}
+                  onFocus={(e) => e.target.select()}
+                  className="flex-1 min-w-0 bg-slate-950/60 border border-slate-700 rounded-md px-2 py-1.5 text-[11px] text-slate-100 font-mono"
+                />
+                <button
+                  onClick={() => {
+                    const url = `${window.location.origin}/c/${candidate.public_token}`;
+                    navigator.clipboard.writeText(url).then(
+                      () => toast.success('Status link copied'),
+                      () => toast.error('Copy failed'),
+                    );
+                  }}
+                  className="text-[11px] px-2.5 py-1.5 rounded-md text-slate-300 hover:text-slate-100 hover:bg-slate-800/60 border border-slate-700 inline-flex items-center gap-1 shrink-0"
+                  title="Copy status link"
+                >
+                  <Copy size={11} /> Copy
+                </button>
+              </div>
+            </Card>
+          )}
 
           <Card>
             <div className="text-slate-200 font-medium mb-2 text-sm">Tags</div>
