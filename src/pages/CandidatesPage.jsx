@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Users, Download, Star, ArrowRight, Trash2, Plus, Activity, Layers, FolderKanban, Briefcase, Tag as TagIcon, Sparkles } from 'lucide-react';
+import { Users, Download, Star, ArrowRight, Trash2, Plus, Activity, Layers, FolderKanban, Briefcase, Tag as TagIcon, Sparkles, X as XIcon, Save, Bookmark, CheckSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import PageHeader from '../components/common/PageHeader.jsx';
@@ -18,7 +18,7 @@ import SemanticSearchDialog from '../components/candidates/SemanticSearchDialog.
 import { supabase } from '../lib/supabase.js';
 import { STAGES } from '../lib/pipeline.js';
 import { useIsAdmin } from '../lib/useIsAdmin.js';
-import { deleteCandidate } from '../lib/api.js';
+import { deleteCandidate, transitionCandidate } from '../lib/api.js';
 
 const STATUS_OPTIONS = [
   { value: '',          label: 'All statuses' },
@@ -41,6 +41,47 @@ export default function CandidatesPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [smartSearchOpen, setSmartSearchOpen] = useState(false);
 
+  // ── Bulk selection ─────────────────────────────────────────────────
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkAction, setBulkAction] = useState(null); // 'advance' | 'reject' | 'tag' | null
+  const [bulkTagText, setBulkTagText] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const toggleSelected = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const clearSelection = () => setSelectedIds(new Set());
+
+  // ── Saved searches (localStorage; per-browser is fine for v1) ──────
+  const SAVED_KEY = 'slate.candidates.saved-searches';
+  const [savedSearches, setSavedSearches] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(SAVED_KEY) || '[]'); }
+    catch { return []; }
+  });
+  const persistSaved = (next) => {
+    setSavedSearches(next);
+    try { localStorage.setItem(SAVED_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+  };
+  const currentFilters = { search, statusFilter, stageFilter, projectFilter, roleFilter, tagFilter };
+  const applySaved = (s) => {
+    setSearch(s.filters?.search || '');
+    setStatusFilter(s.filters?.statusFilter ?? 'active');
+    setStageFilter(s.filters?.stageFilter || '');
+    setProjectFilter(s.filters?.projectFilter || '');
+    setRoleFilter(s.filters?.roleFilter || '');
+    setTagFilter(s.filters?.tagFilter || '');
+  };
+  const saveCurrent = () => {
+    const name = window.prompt('Name this saved search:', '');
+    if (!name || !name.trim()) return;
+    const next = [{ id: crypto.randomUUID(), name: name.trim(), filters: currentFilters }, ...savedSearches].slice(0, 12);
+    persistSaved(next);
+  };
+  const removeSaved = (id) => persistSaved(savedSearches.filter((s) => s.id !== id));
+
   const remove = useMutation({
     mutationFn: async (id) => deleteCandidate({ candidateId: id }),
     onSuccess: () => {
@@ -51,6 +92,66 @@ export default function CandidatesPage() {
     },
     onError: (e) => toast.error(e.message),
   });
+
+  // Run a per-candidate operation across the selected set with limited
+  // concurrency. Returns { ok, failed } counts.
+  const runBulk = async (ids, op, label) => {
+    const arr = [...ids];
+    if (arr.length === 0) return { ok: 0, failed: 0 };
+    setBulkBusy(true);
+    const t = toast.loading(`${label} (0 / ${arr.length})...`);
+    let ok = 0;
+    let failed = 0;
+    // 4 at a time keeps DB / endpoint load reasonable without making the user wait too long
+    const CONC = 4;
+    const queue = [...arr];
+    const workers = Array.from({ length: Math.min(CONC, queue.length) }, async () => {
+      while (queue.length) {
+        const id = queue.shift();
+        try { await op(id); ok += 1; }
+        catch (_) { failed += 1; }
+        toast.loading(`${label} (${ok + failed} / ${arr.length})...`, { id: t });
+      }
+    });
+    await Promise.all(workers);
+    if (failed === 0) toast.success(`${label}: ${ok} done`, { id: t });
+    else toast(`${label}: ${ok} succeeded, ${failed} failed`, { id: t, icon: '⚠️' });
+    setBulkBusy(false);
+    return { ok, failed };
+  };
+
+  const performBulkAdvance = async () => {
+    await runBulk(selectedIds, (id) => transitionCandidate({ candidateId: id, action: 'advance' }), 'Advancing');
+    qc.invalidateQueries({ queryKey: ['candidates-all'] });
+    qc.invalidateQueries({ queryKey: ['dashboard'] });
+    setBulkAction(null);
+    clearSelection();
+  };
+
+  const performBulkReject = async () => {
+    await runBulk(selectedIds, (id) => transitionCandidate({ candidateId: id, action: 'reject' }), 'Rejecting');
+    qc.invalidateQueries({ queryKey: ['candidates-all'] });
+    qc.invalidateQueries({ queryKey: ['dashboard'] });
+    setBulkAction(null);
+    clearSelection();
+  };
+
+  const performBulkTag = async () => {
+    const tag = bulkTagText.trim().toLowerCase().replace(/\s+/g, '-');
+    if (!tag) { toast.error('Enter a tag name.'); return; }
+    // Read existing tags per candidate so we don't clobber.
+    const byId = Object.fromEntries((candidates || []).map((c) => [c.id, c]));
+    await runBulk(selectedIds, async (id) => {
+      const cur = (byId[id]?.tags || []);
+      if (cur.includes(tag)) return; // no-op
+      const { error } = await supabase.from('candidates').update({ tags: [...cur, tag] }).eq('id', id);
+      if (error) throw error;
+    }, `Tagging "${tag}"`);
+    qc.invalidateQueries({ queryKey: ['candidates-all'] });
+    setBulkAction(null);
+    setBulkTagText('');
+    clearSelection();
+  };
 
   const { data: candidates, isLoading } = useQuery({
     queryKey: ['candidates-all'],
@@ -229,7 +330,72 @@ export default function CandidatesPage() {
             ]}
           />
         )}
+        <button
+          onClick={saveCurrent}
+          className="text-[11px] px-2.5 py-1 rounded-full text-slate-300 hover:text-slate-100 hover:bg-slate-800/60 border border-slate-700 inline-flex items-center gap-1.5 ml-auto"
+          title="Save current filter combination"
+        >
+          <Save size={11} /> Save filter
+        </button>
       </FilterBar>
+
+      {savedSearches.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap mb-4 -mt-2">
+          <span className="text-[11px] uppercase tracking-wide text-slate-500 inline-flex items-center gap-1 mr-1">
+            <Bookmark size={10} /> Saved
+          </span>
+          {savedSearches.map((s) => (
+            <span
+              key={s.id}
+              className="inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-full bg-indigo-500/10 text-indigo-200 border border-indigo-500/30"
+            >
+              <button onClick={() => applySaved(s)} className="hover:text-indigo-100">{s.name}</button>
+              <button onClick={() => removeSaved(s.id)} title="Delete saved search" className="text-indigo-300/70 hover:text-rose-200">
+                <XIcon size={10} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Bulk action toolbar - sticky-feeling bar that surfaces when any row is selected */}
+      {selectedIds.size > 0 && (
+        <div className="mb-3 rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-2 flex items-center gap-2 flex-wrap">
+          <CheckSquare size={14} className="text-indigo-300 shrink-0" />
+          <span className="text-sm text-slate-100">
+            <strong className="tabular-nums">{selectedIds.size}</strong> selected
+          </span>
+          <button
+            onClick={clearSelection}
+            className="text-[11px] px-2 py-0.5 rounded-md text-slate-300 hover:text-slate-100 hover:bg-slate-800/60"
+          >
+            Clear
+          </button>
+          <div className="flex items-center gap-1.5 ml-auto flex-wrap">
+            <button
+              onClick={() => setBulkAction('advance')}
+              disabled={bulkBusy}
+              className="text-[11px] px-2.5 py-1 rounded-md text-emerald-200 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 inline-flex items-center gap-1"
+            >
+              <ArrowRight size={11} /> Advance stage
+            </button>
+            <button
+              onClick={() => setBulkAction('reject')}
+              disabled={bulkBusy}
+              className="text-[11px] px-2.5 py-1 rounded-md text-rose-300 hover:text-rose-200 hover:bg-rose-500/10 border border-rose-500/30"
+            >
+              Reject
+            </button>
+            <button
+              onClick={() => setBulkAction('tag')}
+              disabled={bulkBusy}
+              className="text-[11px] px-2.5 py-1 rounded-md text-slate-300 hover:text-slate-100 hover:bg-slate-800/60 border border-slate-700 inline-flex items-center gap-1"
+            >
+              <TagIcon size={11} /> Add tag
+            </button>
+          </div>
+        </div>
+      )}
 
       {isLoading ? (
         <Spinner />
@@ -250,6 +416,18 @@ export default function CandidatesPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-wide text-slate-500 border-b border-slate-800">
+                  <th className="pl-4 pr-2 py-2.5 font-medium w-8">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 accent-indigo-500"
+                      checked={filtered.length > 0 && filtered.every((c) => selectedIds.has(c.id))}
+                      onChange={(e) => {
+                        if (e.target.checked) setSelectedIds(new Set(filtered.map((c) => c.id)));
+                        else clearSelection();
+                      }}
+                      title="Select all visible"
+                    />
+                  </th>
                   <th className="px-4 py-2.5 font-medium">Candidate</th>
                   <th className="px-4 py-2.5 font-medium">Role / Project</th>
                   <th className="px-4 py-2.5 font-medium">Stage</th>
@@ -264,8 +442,18 @@ export default function CandidatesPage() {
                 {filtered.map((c) => (
                   <tr
                     key={c.id}
-                    className="border-b border-slate-800/60 hover:bg-slate-900/40 transition"
+                    className={`border-b border-slate-800/60 hover:bg-slate-900/40 transition ${
+                      selectedIds.has(c.id) ? 'bg-indigo-500/5' : ''
+                    }`}
                   >
+                    <td className="pl-4 pr-2 py-2.5">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 accent-indigo-500"
+                        checked={selectedIds.has(c.id)}
+                        onChange={() => toggleSelected(c.id)}
+                      />
+                    </td>
                     <td className="px-4 py-2.5">
                       <Link to={`/candidates/${c.id}`} className="text-slate-100 font-medium hover:text-indigo-300">
                         {c.full_name || '(no name)'}
@@ -350,6 +538,57 @@ export default function CandidatesPage() {
               <p className="mt-2 text-rose-300 text-xs">This cannot be undone.</p>
             </>
           )
+        }
+      />
+
+      {/* Bulk advance confirm */}
+      <ConfirmDialog
+        open={bulkAction === 'advance'}
+        onClose={() => setBulkAction(null)}
+        onConfirm={performBulkAdvance}
+        loading={bulkBusy}
+        title={`Advance ${selectedIds.size} candidate${selectedIds.size === 1 ? '' : 's'}?`}
+        message={
+          <>
+            <p>Each selected candidate moves to the next enabled stage in their pipeline. Candidates already in a terminal status (hired / rejected / withdrew) are skipped.</p>
+            <p className="mt-2 text-slate-400 text-xs">Runs in parallel batches of 4.</p>
+          </>
+        }
+      />
+
+      {/* Bulk reject confirm */}
+      <ConfirmDialog
+        open={bulkAction === 'reject'}
+        onClose={() => setBulkAction(null)}
+        onConfirm={performBulkReject}
+        loading={bulkBusy}
+        title={`Reject ${selectedIds.size} candidate${selectedIds.size === 1 ? '' : 's'}?`}
+        message={
+          <>
+            <p>Each selected candidate's current pipeline stage is marked <em>failed</em> and status flips to <strong className="text-rose-300">rejected</strong>.</p>
+            <p className="mt-2 text-rose-300 text-xs">No emails are sent automatically - use Email candidate per row if you want to notify them.</p>
+          </>
+        }
+      />
+
+      {/* Bulk add tag - same dialog shape but with an input inside the message */}
+      <ConfirmDialog
+        open={bulkAction === 'tag'}
+        onClose={() => { setBulkAction(null); setBulkTagText(''); }}
+        onConfirm={performBulkTag}
+        loading={bulkBusy}
+        title={`Add tag to ${selectedIds.size} candidate${selectedIds.size === 1 ? '' : 's'}?`}
+        message={
+          <>
+            <p className="mb-2">Tag will be appended to each selected candidate (no duplicates).</p>
+            <input
+              autoFocus
+              value={bulkTagText}
+              onChange={(e) => setBulkTagText(e.target.value)}
+              placeholder="e.g. callback, priority"
+              className="w-full bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </>
         }
       />
     </>
